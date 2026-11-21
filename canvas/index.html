@@ -28,6 +28,7 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 .q{border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:8px 0;background:#fff}.q b{font-size:13.5px}.q p{margin:4px 0 8px;font-size:13px;line-height:1.5}
 .opts{display:flex;flex-wrap:wrap;gap:5px}.opts button{font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid #cfdcd3;border-radius:8px;background:#fff;cursor:pointer}
 .q.done{opacity:.6}.q .ok{font-size:12.5px;color:#1f6b3a;font-weight:700}
+#zb{position:absolute;right:12px;bottom:12px;z-index:5;display:flex;flex-direction:column;gap:6px}#zb button{width:42px;height:42px;font-size:20px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 2px 8px #0001}
 #hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;background:#1d3a2ce8;color:#fff;font-size:12.5px;padding:8px 13px;border-radius:10px;max-width:92%;text-align:center}
 #load{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;background:#eef1ee;font-size:14px;color:#4d6355;text-align:center;line-height:1.6;padding:20px}
 #hidden{position:absolute;left:-2000px;top:0;width:600px;height:400px}
@@ -52,7 +53,7 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
   <div class="pane" id="pane"></div>
 </aside>
 <div id="stage">
-  <canvas id="gl"></canvas><div id="labels"></div>
+  <canvas id="gl"></canvas><div id="labels"></div><div id="zb"><button id="zin" aria-label="확대">＋</button><button id="zout" aria-label="축소">－</button></div>
   <div id="hint">드래그로 돌리고, 휠·두 손가락으로 확대해요 · 누르면 그 픽셀이 칠해져요</div>
   <div id="load">cukmap 지도에서 지형과 건물 모양을 받아<br>1m 블록 세상으로 바꾸는 중이에요…</div>
   <div id="hidden"></div>
@@ -151,8 +152,10 @@ gl.attachShader(prog, sh(gl.VERTEX_SHADER, `#version 300 es
 in vec3 p;in vec3 c;in vec2 t;in float s;uniform mat4 m;uniform vec3 eye;out vec3 vc;out vec2 vt;out float vs;out float fd;
 void main(){gl_Position=m*vec4(p,1.);vc=c;vt=t;vs=s;fd=distance(p,eye);}`));
 gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `#version 300 es
-precision highp float;in vec3 vc;in vec2 vt;in float vs;in float fd;uniform sampler2D tex;uniform float show;out vec4 o;
-void main(){vec4 q=texture(tex,vt);vec3 c=(q.a>.5&&show>.5)?q.rgb*(vs*.88+.12):vc;float f=clamp((fd-260.)/500.,0.,.7);o=vec4(mix(c,vec3(.93,.95,.93),f),1.);}`));
+precision highp float;in vec3 vc;in vec2 vt;in float vs;in float fd;uniform sampler2D tex;uniform float show;uniform vec2 tsz;out vec4 o;
+void main(){vec4 q=texture(tex,vt);vec3 c=(q.a>.5&&show>.5)?q.rgb*(vs*.88+.12):vc;
+ vec2 g=fract(vt*tsz);float e=min(min(g.x,1.-g.x),min(g.y,1.-g.y));float near=1.-smoothstep(3.,9.,fd);c*=1.-.12*near*(1.-smoothstep(.0,.06,e)); // 가까이 가면 픽셀 칸 선
+ float f=clamp((fd-260.)/500.,0.,.7);o=vec4(mix(c,vec3(.93,.95,.93),f),1.);}`));
 gl.linkProgram(prog); gl.useProgram(prog);
 const buf = (data, attr, n) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); const l = gl.getAttribLocation(prog, attr); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); return b; };
 buf(pos, 'p', 3); buf(col, 'c', 3); buf(uv, 't', 2); buf(shd, 's', 1);
@@ -164,7 +167,7 @@ gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TW, TH, 0, gl.RGBA, gl.UNSIGNED_BYTE, TEX);
 gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
 const uM = gl.getUniformLocation(prog, 'm'), uE = gl.getUniformLocation(prog, 'eye'), uS = gl.getUniformLocation(prog, 'show');
-gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
+gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0); gl.uniform2f(gl.getUniformLocation(prog, 'tsz'), TW, TH);
 // 그림판의 한 사각형(x, y, w, h 픽셀)을 GPU로 다시 보낸다
 function upRect(x, y, w, h) { const a = new Uint8Array(w * h * 4); for (let r = 0; r < h; r++) a.set(TEX.subarray(((y + r) * TW + x) * 4, ((y + r) * TW + x + w) * 4), r * w * 4); gl.bindTexture(gl.TEXTURE_2D, texO); gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a); dirty = true; }
 function refreshAll() { gl.bindTexture(gl.TEXTURE_2D, texO); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TW, TH, gl.RGBA, gl.UNSIGNED_BYTE, TEX); dirty = true; }
@@ -182,7 +185,7 @@ function frame() {
   if (dirty) {
     dirty = false; gl.viewport(0, 0, cv.width, cv.height);
     EYE = [cam.tx + cam.dist * Math.sin(cam.yaw) * Math.cos(cam.pitch), cam.ty + cam.dist * Math.sin(cam.pitch), cam.tz + cam.dist * Math.cos(cam.yaw) * Math.cos(cam.pitch)];
-    MVP = mul(persp(Math.PI / 4, w / h, 1, 1500), lookAt(EYE, [cam.tx, cam.ty, cam.tz]));
+    MVP = mul(persp(Math.PI / 4, w / h, Math.max(.03, cam.dist * .015), 1500), lookAt(EYE, [cam.tx, cam.ty, cam.tz]));
     gl.clearColor(.93, .95, .93, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.uniformMatrix4fv(uM, false, MVP); gl.uniform3fv(uE, EYE); gl.uniform1f(uS, hidePaint ? 0 : 1); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_INT, 0);
     // 건물 이름표
@@ -207,7 +210,7 @@ function pickFace(px, py) {
     if (solid(i, Y, j)) { const d = last === 0 ? (st[0] > 0 ? 1 : 0) : last === 1 ? (st[1] > 0 ? 3 : 2) : (st[2] > 0 ? 5 : 4); const k = faceIndex.get(((j * NY + (Y - yMin)) * NX + i) * 6 + d); if (k == null) return null;
       const hp = [EYE[0] + dir[0] * tHit, EYE[1] + dir[1] * tHit, EYE[2] + dir[2] * tHit], f = F[k], c = CORNERS[f[3]], o = [S.x0 + f[0] + c[0][0], f[1] + c[0][1], S.z0 + f[2] + c[0][2]];
       const U = sub(c[3], c[0]), W = sub(c[1], c[0]), r = sub(hp, o), clamp = v => Math.max(0, Math.min(SUB - 1, Math.floor(v * SUB)));
-      return { k, a: clamp(dot(r, U)), b: clamp(dot(r, W)) }; }
+      return { k, a: clamp(dot(r, U)), b: clamp(dot(r, W)), hp }; }
     const ax = tM[0] < tM[1] ? (tM[0] < tM[2] ? 0 : 2) : (tM[1] < tM[2] ? 1 : 2);
     tHit = tM[ax];
     if (ax === 0) { i += st[0]; tM[0] += tD[0]; } else if (ax === 1) { Y += st[1]; tM[1] += tD[1]; } else { j += st[2]; tM[2] += tD[2]; }
@@ -222,7 +225,7 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY, e.button]); if (P.size === 1) { downAt = [e.clientX, e.clientY]; moved = 0; } else pinch = null; });
 cv.addEventListener('pointermove', e => {
   if (!P.has(e.pointerId)) return; const [lx, ly, btn] = P.get(e.pointerId), dx = e.clientX - lx, dy = e.clientY - ly; P.set(e.pointerId, [e.clientX, e.clientY, btn]); moved += Math.abs(dx) + Math.abs(dy);
-  if (P.size === 2) { const [a, b] = [...P.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) cam.dist = Math.max(25, Math.min(600, cam.dist * pinch / d)); pinch = d; pan(dx / 2, dy / 2); }
+  if (P.size === 2) { const [a, b] = [...P.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) { const r = cv.getBoundingClientRect(); zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, pinch / d); } pinch = d; pan(dx / 2, dy / 2); }
   else if (drawDrag && btn === 0 && !e.shiftKey) { const r = cv.getBoundingClientRect(), n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 2)); for (let q = 1; q <= n; q++) tap(lx + dx * q / n - r.left, ly + dy * q / n - r.top, true); }
   else if (btn === 2 || e.shiftKey) pan(dx, dy);
   else { cam.yaw -= dx * .006; cam.pitch = Math.max(.08, Math.min(1.5, cam.pitch + dy * .005)); }
@@ -231,7 +234,20 @@ cv.addEventListener('pointermove', e => {
 const pan = (dx, dy) => { const k = cam.dist / 600, s = Math.sin(cam.yaw), c = Math.cos(cam.yaw); cam.tx += (-dx * c - dy * s) * k; cam.tz += (dx * s - dy * c) * k; };
 const up = e => { const had = P.size; P.delete(e.pointerId); if (P.size < 2) pinch = null; if (had === 1 && (moved < 6 || drawDrag) && e.type === 'pointerup') { const r = cv.getBoundingClientRect(); tap(e.clientX - r.left, e.clientY - r.top); } };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-cv.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.max(25, Math.min(600, cam.dist * Math.exp(e.deltaY * .0012))); dirty = true; }, { passive: false });
+const MIN_D = 1.5, MAX_D = 600;
+// 누른 곳(커서) 쪽으로 확대·축소: 가리키는 점이 화면에서 그대로 있도록 카메라 중심도 같이 옮긴다
+function zoomAt(px, py, f) {
+  const nd = Math.max(MIN_D, Math.min(MAX_D, cam.dist * f)), k = 1 - nd / cam.dist;
+  const h = MVP && pickFace(px, py);
+  if (h && h.hp) { cam.tx += (h.hp[0] - cam.tx) * k; cam.ty += (h.hp[1] - cam.ty) * k; cam.tz += (h.hp[2] - cam.tz) * k; }
+  cam.dist = nd; dirty = true;
+}
+cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(e.deltaY * .0015)); }, { passive: false });
+$('zin').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, .55); }; $('zout').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.8); };
+// 키보드: +/- 확대, 방향키 이동
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; const r = cv.getBoundingClientRect();
+  if (e.key === '+' || e.key === '=') zoomAt(r.width / 2, r.height / 2, .7); else if (e.key === '-') zoomAt(r.width / 2, r.height / 2, 1.4);
+  else if (e.key.startsWith('Arrow')) { const m = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }[e.key]; pan(m[0], m[1]); dirty = true; } });
 
 const who = new Map(), FEED = ['<b>니콜스요정</b> 님이 니콜스관 위에 하트를 그렸어요', '<b>다솔길고양이</b> 님이 현장 퀘스트로 물감 300칸을 모았어요'];
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
