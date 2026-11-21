@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>니콜스관 탐사대 (시안)</title>
+<!-- 2단계 화면 시안: 서버 없이 가짜 데이터로 움직인다. 답은 이 화면 안에서만 바뀌고 저장되지 않는다. -->
+<style>
+:root{--g:#244f3d;--g2:#eef5ef;--o:#e8552e;--ink:#26392f;--mute:#6b7a70;--line:#dfe7e0;--bg:#f7faf7}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#fff;display:grid;grid-template-columns:380px 1fr;height:100vh;overflow:hidden}
+aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:#fff}
+#map{min-height:300px;position:relative}
+header{padding:16px 18px 10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:19px;margin:0}
+.draft{font-size:11px;color:#9b3a16;background:#fff1ea;border-radius:6px;padding:2px 7px}
+#me{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+#me b{color:var(--ink)}#me .pt{margin-left:auto;font-weight:800;color:var(--g);font-size:15px}
+.tabs{display:flex;gap:4px;padding:10px 14px 0}
+.tabs button{flex:1;font:inherit;font-size:13.5px;padding:8px;border:0;border-bottom:2px solid transparent;background:none;color:var(--mute);cursor:pointer}
+.tabs button.on{color:var(--g);border-color:var(--g);font-weight:800}
+.chips{display:flex;gap:5px;flex-wrap:wrap;padding:10px 14px 4px}
+.chips button{font:inherit;font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink);cursor:pointer}
+.chips button.on{background:var(--g);border-color:var(--g);color:#fff}
+.pane{flex:1;overflow:auto;padding:4px 14px 14px;min-height:0}
+.q{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:#fff;cursor:pointer;font:inherit}
+.q:hover,.q.on{background:var(--g2);border-color:#9cc3a8}
+.q .ic{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff}
+.q .tx{flex:1;min-width:0}.q b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q small{display:block;color:var(--mute);font-size:12px;margin-top:1px}
+.st{flex:none;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.s-new{background:#f1f3f1;color:#6b7a70}.s-ing{background:#fff4dc;color:#94600a}.s-ok{background:#e3f3e7;color:#1f6b3a}.s-err{background:#fde8e1;color:#b2361a}
+/* 퀘스트 카드 */
+#card{display:none;border-top:1px solid var(--line);padding:14px 16px 16px;background:var(--bg);max-height:62vh;overflow:auto}
+#card.show{display:block}
+#card .top{display:flex;align-items:center;gap:8px;margin-bottom:4px}#card .top small{color:var(--mute);font-size:12px}
+#card .x{margin-left:auto;border:0;background:none;font-size:18px;color:var(--mute);cursor:pointer}
+#card h2{font-size:16px;margin:2px 0 6px}#card p{margin:0 0 10px;font-size:13.5px;line-height:1.5}
+#card .why{font-size:12px;color:var(--mute);margin:-4px 0 10px}
+.opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.opts button{font:inherit;font-size:13px;padding:8px 12px;border:1px solid #cfdcd3;border-radius:9px;background:#fff;cursor:pointer}
+.opts button.on{background:var(--g);border-color:var(--g);color:#fff}
+.opts button.none{border-style:dashed;color:#9b3a16}
+.go{width:100%;font:inherit;font-size:14px;font-weight:800;padding:11px;border:0;border-radius:10px;background:var(--o);color:#fff;cursor:pointer}
+.go:disabled{background:#e9c3b7;cursor:default}
+.res{font-size:13px;line-height:1.55;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.res .big{font-size:15px;font-weight:800;color:var(--g)}.res .warn{color:#b2361a;font-weight:800}
+.bar{height:6px;border-radius:3px;background:#e4ebe6;overflow:hidden;margin:6px 0}.bar i{display:block;height:100%;background:#e8a33a}
+textarea{width:100%;font:inherit;font-size:13px;border:1px solid #cfdcd3;border-radius:9px;padding:8px;resize:vertical;min-height:52px;margin-bottom:8px}
+.picking{font-size:12.5px;background:#fff4dc;color:#7a5208;border-radius:9px;padding:8px 10px;margin-bottom:8px}
+/* 순위 */
+.rk{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #eef2ee;font-size:13.5px}
+.rk .n{width:22px;text-align:center;font-weight:800;color:var(--mute)}.rk .nm{flex:1}.rk .sc{font-weight:800}
+.rk .w{flex:1.4;height:8px;border-radius:4px;background:#eef2ee;overflow:hidden}.rk .w i{display:block;height:100%;background:var(--g)}
+.rk.mine{background:#fff7e8;border-radius:8px}.rk.mine .nm{font-weight:800}
+.spothead{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:800;margin:8px 2px 2px}.spothead button{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:4px 9px;cursor:pointer}
+.views{display:flex;gap:6px;margin:0 0 10px}.views button{flex:1;font:inherit;font-size:12.5px;padding:8px;border:1px solid #cfdcd3;border-radius:9px;background:#fff;color:var(--g);cursor:pointer}
+.photo{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:0 0 10px}.photo label{border:1px dashed #9cc3a8;border-radius:9px;padding:8px 10px;cursor:pointer;color:var(--g);background:#fff}.photo img{width:54px;height:54px;object-fit:cover;border-radius:8px}.photo input{display:none}
+.note{font-size:12px;color:var(--mute);line-height:1.55;margin:12px 2px}
+/* 시작 창 */
+#start{position:fixed;inset:0;z-index:50;background:#1c2b2266;display:flex;align-items:center;justify-content:center;padding:16px}
+#start .box{width:min(440px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 18px 50px #0003}
+#start h2{margin:0 0 6px;font-size:21px}#start p{margin:0 0 14px;color:#4d6355;font-size:14px;line-height:1.6}
+#start label{display:block;font-size:12.5px;color:var(--mute);margin:10px 0 4px}
+#start input,#start select{width:100%;font:inherit;font-size:14px;padding:10px;border:1px solid #cfdcd3;border-radius:9px;background:#fff}
+#start .go{margin-top:16px}
+#start ul{margin:0 0 6px;padding-left:18px;font-size:13px;color:#4d6355;line-height:1.7}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d3a2c;color:#fff;font-size:13px;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60}
+#toast.on{opacity:1}
+@media(max-width:760px){body{grid-template-columns:1fr;grid-template-rows:46vh 1fr}#map{order:-1}aside{border-right:0;border-top:1px solid var(--line);min-height:0}#card{max-height:none}body.carding #pane,body.carding #tq,body.carding .tabs{display:none}}
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <div class="brand"><h1>니콜스관 탐사대</h1><span class="draft">시안 · 가짜 데이터</span></div>
+    <div id="me">시작 전이에요<span class="pt"></span></div>
+  </header>
+  <div class="tabs"><button data-t="q" class="on">퀘스트</button><button data-t="r">학과 순위</button></div>
+  <div id="tq">
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="pane" id="pane"></div>
+  <div id="card"></div>
+</aside>
+<div id="map"></div>
+
+<div id="start">
+  <div class="box">
+    <h2>니콜스관 탐사대</h2>
+    <p>cukmap 3D 지도와 실제 학교가 다른 곳을 찾아 우리 과 점수를 올려요. 늘 다니는 길에서 1분이면 끝나요.</p>
+    <ul>
+      <li>질문에 답하면, <b>다른 사람과 답이 같을 때</b> 점수를 받아요.</li>
+      <li>모인 답이 <b>지도와 다르면 '오류 발견'</b> — 큰 점수예요.</li>
+      <li>발견한 오류와 사진은 3D 지도를 고치는 근거로 올라가요. 고쳐지면 보너스!</li>
+    </ul>
+    <label for="nick">닉네임</label><input id="nick" maxlength="12" placeholder="예) 니콜스 탐험가">
+    <label for="dept">학과</label><select id="dept"></select>
+    <button class="go" id="startGo">시작하기</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="https://cukmap.com/kit/v1/cukmap.js"></script>
+<script>
+(async () => {
+const $ = id => document.getElementById(id);
+const DEPTS = ['경영학과','경제학과','국사학과','국어국문학과','국제학부','법학과','사회복지학과','사회학과','심리학과','아동학과','영어영문학부','음악과','일어일본문화학과','중국언어문화학과','철학과','특수교육과','프랑스어문화학과','행정학과','회계학과','자유전공학부','AI의공학과','공간디자인소비자학과','데이터사이언스학과','물리학과','미디어기술콘텐츠학과','바이오로직스공학부','바이오메디컬소프트웨어학과','바이오메디컬화학공학과','생명공학과','수학과','식품영양학과','약학대학','에너지환경공학과','의류학과','의생명과학과','인공지능학과','정보통신전자공학부','컴퓨터정보공학부','화학과'];
+const TYPE = { '층수': ['층', '#24697a'], '겉모습': ['3D', '#3b7dd8'], '비교': ['눈', '#5a4fcf'], '지형': ['땅', '#8a6a2f'], '문': ['문', '#2f6fb0'], '연결': ['연결', '#7a55c7'], '길': ['길', '#2f8f6a'], '강의실': ['방', '#c2456b'], '찾기': ['?', '#e8552e'] };
+const PT_PHOTO = 10; // 사진이 근거로 채택되면
+const STATUS = { new: ['아무도 확인 안 함', 's-new', '#9aa59d'], ing: ['확인 중', 's-ing', '#e8a33a'], ok: ['확정', 's-ok', '#2e8b57'], err: ['오류 발견!', 's-err', '#d9472b'] };
+const NEED = 3; // 같은 답 3개면 확정 (시안 기준)
+const PT = { agree: 10, error: 30, find: 30 };
+const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+
+// 퀘스트 + 가짜 진행 상태
+const data = await (await fetch('data/quests.json', { cache: 'no-cache' })).json();
+const Q = data.quests;
+const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+for (const q of Q) {
+  const h = hash(q.id) % 10;
+  q.answers = h < 4 ? 0 : h < 7 ? 1 + (h % 2) : NEED;
+  q.status = q.answers === 0 ? 'new' : q.answers < NEED ? 'ing' : (h === 9 ? 'err' : 'ok');
+  q.top = q.status === 'err' ? (q.type === '문' ? '1F' : q.options[1] || '조금 달라요') : q.map;
+  q.mine = null;
+}
+// 가짜 학과 점수
+const score = {}; DEPTS.forEach((d, i) => score[d] = (hash(d) % 23) * 10 + (i % 3) * 10);
+let me = null, myPts = 0, mine = 0;
+
+// 지도
+const map = await CUKmap.create('#map', { view: '2d', focus: '니콜스관' });
+// 같은 자리의 퀘스트는 핀 하나로 묶는다(건물 앞에 겉모습·층수·비교가 몰려 있어서)
+const spotKey = q => q.room ? 'r-' + q.room : 's-' + Math.round(q.at[0] / 3) + '_' + Math.round(q.at[1] / 3);
+const SPOTS = new Map(); for (const q of Q) { const k = spotKey(q); q.spot = k; if (!SPOTS.has(k)) SPOTS.set(k, []); SPOTS.get(k).push(q); }
+const RANK = { new: 0, ing: 1, err: 2, ok: 3 };
+const drawSpot = async k => {
+  const qs = SPOTS.get(k), q = qs[0], open = qs.filter(x => !x.mine);
+  const st = (open.length ? open : qs).reduce((a, x) => RANK[x.status] < RANK[a] ? x.status : a, 'ok');
+  const label = qs.length > 1 ? `${open.length}/${qs.length}` : (q.type === '강의실' ? q.room : TYPE[q.type][0]);
+  const base = { id: k, label, color: open.length ? STATUS[st][2] : '#7a55c7' };
+  try { await map.addPin(q.room ? { ...base, room: q.room } : { ...base, x: q.at[0], z: q.at[1], building: q.building || undefined, floor: q.floor || undefined }); qs.forEach(x => x.pinOk = true); }
+  catch (e) { qs.forEach(x => x.pinOk = false); console.warn(k, e.message); }
+};
+const drawPin = q => drawSpot(q.spot);
+for (const k of SPOTS.keys()) await drawSpot(k);
+map.on('pinClick', async e => { if (pickMode) { toast('찾기 중이에요. 핀이 없는 곳을 눌러 위치를 찍어 주세요.'); return; }
+  const qs = SPOTS.get(e.id); if (!qs) return;
+  if (qs.length === 1) return openQ(qs[0]);
+  if (!me) { toast('먼저 닉네임과 학과를 정해 주세요.'); return; }
+  await closeCard(); spot = e.id; filter = '전체'; tab = 'q'; render(); });
+
+// 목록
+let view = '2d', photoData = null, spot = null, filter = '전체', tab = 'q', cur = null, picked = null, pickMode = false, tmpPin = null;
+const kinds = ['전체', '층수', '겉모습', '비교', '지형', '문', '연결', '길', '강의실', '찾기'].filter(k => k === '전체' || Q.some(q => q.type === k));
+$('chips').innerHTML = kinds.map(k => `<button data-k="${k}">${k}${k === '전체' ? '' : ' ' + Q.filter(q => q.type === k).length}</button>`).join('');
+$('chips').onclick = e => { const b = e.target.closest('button'); if (!b) return; filter = b.dataset.k; spot = null; render(); };
+const list = () => {
+  $('pane').innerHTML = '';
+  $('chips').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.k === filter));
+  const order = { new: 0, ing: 1, err: 2, ok: 3 };
+  const qs = Q.filter(q => (filter === '전체' || q.type === filter) && (!spot || q.spot === spot)).sort((a, b) => order[a.status] - order[b.status]);
+  if (spot) { const h = document.createElement('div'); h.className = 'spothead'; h.innerHTML = `<span>이 자리 퀘스트 ${qs.length}개</span><button>전체 보기</button>`; h.querySelector('button').onclick = () => { spot = null; render(); }; $('pane').appendChild(h); }
+  for (const q of qs) {
+    const b = document.createElement('button'); b.className = 'q' + (cur === q ? ' on' : '');
+    const [ic, col] = TYPE[q.type];
+    const where = q.type === '찾기' ? '찾기' : [q.building, q.floor].filter(Boolean).join(' ') || '바깥';
+    b.innerHTML = `<span class="ic" style="background:${col}">${ic}</span><span class="tx"><b></b><small></small></span><span class="st ${STATUS[q.status][1]}">${q.mine ? '내 답 ✓' : STATUS[q.status][0]}</span>`;
+    b.querySelector('b').textContent = q.title; b.querySelector('small').textContent = where + (q.status === 'ing' ? ` · ${q.answers}/${NEED}명` : '');
+    b.onclick = () => openQ(q);
+    $('pane').appendChild(b);
+  }
+  $('pane').insertAdjacentHTML('beforeend', `<p class="note">회색은 아직 아무도 확인하지 않은 곳이에요. 처음 확인하면 점수가 커요. 지도 값은 사진·추정으로 그린 것이라 틀릴 수 있어요.</p>`);
+};
+const ranks = () => {
+  const arr = Object.entries(score).sort((a, b) => b[1] - a[1]); const max = arr[0][1] || 1;
+  const myIdx = me ? arr.findIndex(([d]) => d === me.dept) : -1;
+  const show = arr.slice(0, 10); if (myIdx >= 10) show.push(arr[myIdx]);
+  $('pane').innerHTML = show.map(([d, s]) => { const i = arr.findIndex(x => x[0] === d);
+    return `<div class="rk${me && d === me.dept ? ' mine' : ''}"><span class="n">${i + 1}</span><span class="nm">${d}</span><span class="w"><i style="width:${s / max * 100}%"></i></span><span class="sc">${s}</span></div>`; }).join('')
+    + `<p class="note">내 기록: 답 ${mine}개 · ${myPts}점 (확정되면 들어오는 점수 포함)<br>시안이라 학과 점수는 가짜예요.</p>`;
+};
+const render = () => { document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab)); $('tq').style.display = tab === 'q' ? '' : 'none'; tab === 'q' ? list() : ranks(); };
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; render(); });
+
+// 퀘스트 카드
+const closeCard = async () => { $('card').classList.remove('show'); document.body.classList.remove('carding'); cur = null; pickMode = false; if (tmpPin) { await map.removePin('tmp'); tmpPin = null; } list(); };
+async function openQ(q) {
+  if (!me) { toast('먼저 닉네임과 학과를 정해 주세요.'); return; }
+  if (tmpPin) { await map.removePin('tmp'); tmpPin = null; }
+  cur = q; picked = null; pickMode = false; photoData = null; tab = 'q'; render();
+  try {
+    if (view !== '2d') { await map.setView('2d'); view = '2d'; } // 답하기 전에는 평면만 (지도 모습을 따라 답하지 않게)
+    if (q.room) await map.focus({ room: q.room });
+    else if (q.floor && q.building) { await map.focus({ building: q.building, floor: q.floor }); }
+    else await map.focus({ x: q.at[0], z: q.at[1], zoom: 1.6 });
+  } catch (e) {}
+  if (q.pinOk) map.selectPin(q.spot);
+  drawCard();
+}
+function drawCard() {
+  const q = cur, c = $('card'); c.classList.add('show'); document.body.classList.add('carding');
+  const [ic, col] = TYPE[q.type];
+  let h = `<div class="top"><span class="st ${STATUS[q.status][1]}">${STATUS[q.status][0]}</span><small>${q.type}${q.floor ? ' · ' + q.floor : ''}</small><button class="x" aria-label="닫기">×</button></div><h2></h2><p class="qq"></p><p class="why"></p>`;
+  if (q.mine) {
+    h += resultHtml(q) + `<div class="views" style="margin-top:10px"><button data-v="2d">평면</button><button data-v="3d">입체로 보기</button>${q.room ? '' : '<button data-v="walk">지상 시점으로 비교</button>'}</div>`;
+  } else if (q.type === '찾기') {
+    h += `<div class="picking">${picked ? '찍은 위치를 확인하고 무엇인지 골라 주세요.' : '지도에서 그 위치를 눌러 찍어 주세요.'}</div>
+      <div class="opts">${['출입구', '계단', '샛길', '기타'].map(o => `<button data-o="${o}">${o}</button>`).join('')}</div>
+      <textarea id="memo" placeholder="한 줄 설명 (예: 1층 매점 옆 유리문)"></textarea>
+      <button class="go" disabled>발견 남기기</button>`;
+  } else {
+    if (q.type === '비교') h += `<div class="views"><button data-v="walk">지상 시점 화면 보기</button><button data-v="2d">평면으로</button></div>`;
+    const opts = q.options.filter(o => o !== '문이 없어요' && o !== '계단이 없어요');
+    h += `<div class="opts">${opts.map(o => `<button data-o="${o}">${o}</button>`).join('')}${q.type === '강의실' ? '' : '<button class="none" data-o="여기엔 없어요">여기엔 없어요</button>'}</div>
+      ${q.photo ? `<div class="photo"><label>📷 같은 각도로 사진 남기기<input type="file" accept="image/*" capture="environment"></label><span class="ph">사진이 근거로 쓰이면 +${PT_PHOTO}점 · 사람 얼굴은 피해 주세요</span></div>` : ''}
+      <button class="go" disabled>답 남기기</button>`;
+  }
+  c.innerHTML = h;
+  c.querySelector('h2').textContent = q.title; c.querySelector('.qq').textContent = q.q; c.querySelector('.why').textContent = q.why || '';
+  c.querySelector('.x').onclick = closeCard;
+  c.querySelectorAll('.views button').forEach(b => b.onclick = () => showView(b.dataset.v, q));
+  const fi = c.querySelector('.photo input'); if (fi) fi.onchange = () => { const f = fi.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { photoData = r.result; const im = document.createElement('img'); im.src = photoData; const ph = c.querySelector('.ph'); ph.textContent = '사진을 붙였어요'; ph.before(im); }; r.readAsDataURL(f); };
+  let sel = null; const go = c.querySelector('.go');
+  c.querySelectorAll('.opts button').forEach(b => b.onclick = () => { sel = b.dataset.o; c.querySelectorAll('.opts button').forEach(x => x.classList.toggle('on', x === b)); if (go) go.disabled = q.type === '찾기' ? !(sel && picked) : !sel; });
+  if (q.type === '찾기' && !q.mine) pickMode = true;
+  if (go) go.onclick = () => answer(q, sel, q.type === '찾기' ? ($('memo').value || '').trim() : '');
+}
+async function showView(v, q) {
+  try {
+    if (v === 'walk') { const s = q.stand || q.at; await map.walkAt({ x: s[0], z: s[1], look: q.look ? { building: q.look } : { x: q.at[0], z: q.at[1] } }); }
+    else if (v === '3d') { await map.setView('3d'); await map.focus(q.room ? { room: q.room } : { x: q.at[0], z: q.at[1], building: q.building || undefined }); }
+    else { await map.setView('2d'); await map.focus(q.room ? { room: q.room } : { x: q.at[0], z: q.at[1], zoom: 1.6 }); }
+    view = v;
+  } catch (e) { toast('이 보기로 옮기지 못했어요: ' + e.message); }
+}
+function resultHtml(q) {
+  if (q.type === '찾기') return `<div class="res"><span class="big">발견을 남겼어요</span><br>남긴 것: ${esc(q.mine)}${q.memo ? ' — ' + esc(q.memo) : ''}<br>근처(10m 안)에서 다른 사람 ${NEED - 1}명이 같은 걸 찍으면 확정되고 <b>+${PT.find}점</b>이에요.<div class="bar"><i style="width:${100 / NEED}%"></i></div></div>`;
+  if (q.type === '비교') return `<div class="res"><span class="big">${q.mine === '거의 똑같아요' ? '거의 똑같다고 남겼어요' : '다른 점을 남겼어요: ' + esc(q.mine)}</span><br>같은 점을 ${NEED}명이 고르면 <b>3D 수정 요청</b>으로 오류 제보에 올라가요. 지금 ${q.answers}/${NEED}.<div class="bar"><i style="width:${q.answers / NEED * 100}%"></i></div>${q.photoMine ? '📷 사진을 함께 남겼어요. 3D를 고치는 사람이 근거로 쓰면 <b>+' + PT_PHOTO + '점</b>이에요.' : '사진이 있으면 고치는 사람이 훨씬 정확하게 고칠 수 있어요.'}</div>`;
+  const n = q.answers, same = q.mine === q.top;
+  const mapLine = q.map ? `지도에는 <b>${esc(q.map)}</b>(으)로 되어 있어요.` : '지도에는 아직 값이 없어요.';
+  const diff = q.map && q.mine !== q.map;
+  return `<div class="res"><span class="big">답을 남겼어요: ${esc(q.mine)}</span><br>${mapLine}${diff ? ' <span class="warn">내 답과 달라요 — 오류일 수 있어요!</span>' : ''}<br>
+    ${n >= NEED ? (same ? `이미 확정된 답과 같아요. <b>+${PT.agree}점</b>` : '확정된 답과 달라요. 다시 확인이 필요한 곳으로 올려 둘게요.')
+      : `같은 답이 ${NEED}개 모이면 확정돼요. 지금 ${n}/${NEED}.<div class="bar"><i style="width:${n / NEED * 100}%"></i></div>확정되면 <b>+${PT.agree}점</b>${diff ? `, 지도와 다르면 <b>오류 발견 +${PT.error}점</b>` : ''}이에요.`}
+    ${q.after ? `<br><small>${esc(q.after)}</small>` : ''}${q.photoMine ? '<br>📷 사진을 함께 남겼어요. 3D를 고치는 사람이 근거로 쓰면 <b>+' + PT_PHOTO + '점</b>이에요.' : ''}
+    <br><small style="color:#6b7a70">지도 값은 답을 남긴 뒤에만 보여 줘요 (먼저 보면 따라 답하게 되니까요).</small></div>`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function answer(q, sel, memo) {
+  q.mine = sel; q.memo = memo; q.photoMine = !!photoData; mine++;
+  q.answers = Math.min(NEED, q.answers + 1);
+  if (q.status === 'new') q.status = 'ing';
+  if (q.answers >= NEED && q.status === 'ing') q.status = q.map && sel !== q.map ? 'err' : 'ok';
+  const gain = q.status === 'err' ? PT.error : q.status === 'ok' ? PT.agree : 0;
+  myPts += gain; score[me.dept] += gain;
+  pickMode = false;
+  if (tmpPin) { await map.removePin('tmp'); tmpPin = null; }
+  if (q.type === '찾기' && picked) await map.addPin({ id: 'mine-' + q.id, x: picked.x, z: picked.z, label: sel, color: '#7a55c7' });
+  else await drawPin(q);
+  updMe(); drawCard(); list();
+  toast(gain ? `+${gain}점! ${me.dept} 점수에 더해졌어요.` : '답을 남겼어요. 확정되면 점수가 들어와요.');
+}
+map.on('click', async e => {
+  if (!pickMode || !cur || cur.type !== '찾기') return;
+  picked = { x: e.x, z: e.z };
+  await map.addPin({ id: 'tmp', x: e.x, z: e.z, label: '여기', color: '#7a55c7' }); tmpPin = true;
+  const go = $('card').querySelector('.go'); const on = $('card').querySelector('.opts button.on');
+  $('card').querySelector('.picking').textContent = '찍은 위치를 확인하고 무엇인지 골라 주세요. 다시 누르면 위치가 바뀌어요.';
+  if (go) go.disabled = !on;
+});
+
+// 시작
+$('dept').innerHTML = '<option value="">학과를 골라 주세요</option>' + DEPTS.map(d => `<option>${d}</option>`).join('');
+const updMe = () => { $('me').innerHTML = ''; const n = document.createElement('b'); n.textContent = me.nick; $('me').append(n, ' · ' + me.dept); const p = document.createElement('span'); p.className = 'pt'; p.textContent = myPts + '점'; $('me').appendChild(p); };
+$('startGo').onclick = () => {
+  const nick = $('nick').value.trim(), dept = $('dept').value;
+  if (!nick || !dept) { toast('닉네임과 학과를 모두 정해 주세요.'); return; }
+  me = { nick, dept }; $('start').remove(); updMe(); render();
+};
+render();
+})().catch(e => { console.error(e); document.getElementById('pane').textContent = '불러오지 못했어요: ' + e.message; });
+</script>
+</body>
+</html>
