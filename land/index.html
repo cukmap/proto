@@ -93,7 +93,7 @@ const BLD = ['니콜스관', '학생미래인재관', '다솔관', '밤비노관
 let me = null, myCells = 0;
 
 // 지도와 벽 칸 목록
-const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관' });
+const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
 const F = {}; for (const b of BLD) F[b] = await map.faces(b);
 const key = (b, s, f) => b + '|' + s + '|' + f;
 // 가짜 시작 상태: 몇몇 학과가 이미 칸을 차지하고 있음

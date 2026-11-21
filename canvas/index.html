@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>캔버스 (시안)</title>
+<!-- 시안: 서버 없이 가짜 데이터로 움직인다. 물감·그림은 이 화면에서만 바뀌고 저장되지 않는다. -->
+<style>
+:root{--g:#244f3d;--g2:#eef5ef;--o:#e8552e;--ink:#26392f;--mute:#6b7a70;--line:#dfe7e0;--bg:#f7faf7}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#fff;display:grid;grid-template-columns:360px 1fr;height:100vh;overflow:hidden}
+aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+#mapwrap{position:relative;min-height:300px}#map{position:absolute;inset:0}
+header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:8px}h1{font-size:19px;margin:0}
+.draft{font-size:11px;color:#9b3a16;background:#fff1ea;border-radius:6px;padding:2px 7px}
+#me{margin-top:6px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}#me b{color:var(--ink)}
+#ink{margin-left:auto;font-weight:800;color:var(--g);font-size:15px}
+.tabs{display:flex;gap:4px;padding:8px 14px 0}.tabs button{flex:1;font:inherit;font-size:13.5px;padding:9px;border:0;border-bottom:2px solid transparent;background:none;color:var(--mute);cursor:pointer}.tabs button.on{color:var(--g);border-color:var(--g);font-weight:800}
+.pane{flex:1;overflow:auto;padding:12px 14px 14px;min-height:0}
+.how{font-size:12.5px;color:#4d6355;background:var(--bg);border-radius:10px;padding:9px 11px;line-height:1.55;margin-bottom:12px}
+.pal{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px}.pal button{aspect-ratio:1;border-radius:9px;border:2px solid #fff;box-shadow:0 0 0 1px #0002;cursor:pointer}.pal button.on{box-shadow:0 0 0 3px var(--ink)}
+.row{display:flex;gap:6px;margin-bottom:10px}.row button{flex:1;font:inherit;font-size:12.5px;padding:9px 8px;border:1px solid #cfdcd3;border-radius:9px;background:#fff;cursor:pointer;color:var(--g)}.row button.on{background:#fff4dc;border-color:#e8a33a;color:#7a5208}
+.walls button{display:block;width:100%;text-align:left;font:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:5px 0;cursor:pointer}.walls button small{color:var(--mute)}
+.feed{font-size:12px;color:var(--mute);line-height:1.7;margin-top:12px}.feed b{color:var(--ink)}
+.q{border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin:8px 0;background:#fff}.q b{font-size:13.5px}.q p{margin:4px 0 8px;font-size:13px;line-height:1.5}
+.opts{display:flex;flex-wrap:wrap;gap:5px}.opts button{font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid #cfdcd3;border-radius:8px;background:#fff;cursor:pointer}
+.q.done{opacity:.6}.q .ok{font-size:12.5px;color:#1f6b3a;font-weight:700}
+#hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;background:#1d3a2ce8;color:#fff;font-size:12.5px;padding:8px 13px;border-radius:10px;white-space:nowrap}
+#tools{position:absolute;right:12px;bottom:12px;z-index:5;display:flex;gap:6px}
+#tools button{font:inherit;font-size:12.5px;padding:8px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 2px 8px #0001}#tools button.on{background:var(--g);color:#fff;border-color:var(--g)}
+#start{position:fixed;inset:0;z-index:50;background:#1c2b2266;display:flex;align-items:center;justify-content:center;padding:16px}
+#start .box{width:min(440px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 18px 50px #0003}
+#start h2{margin:0 0 6px;font-size:21px}#start p{margin:0 0 12px;color:#4d6355;font-size:14px;line-height:1.6}
+#start ul{margin:0 0 6px;padding-left:18px;font-size:13px;color:#4d6355;line-height:1.7}
+#start label{display:block;font-size:12.5px;color:var(--mute);margin:10px 0 4px}
+#start input{width:100%;font:inherit;font-size:14px;padding:10px;border:1px solid #cfdcd3;border-radius:9px}
+.go{width:100%;font:inherit;font-size:14px;font-weight:800;padding:11px;border:0;border-radius:10px;background:var(--o);color:#fff;cursor:pointer;margin-top:16px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d3a2c;color:#fff;font-size:13px;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60}#toast.on{opacity:1}
+@media(max-width:760px){body{grid-template-columns:1fr;grid-template-rows:52vh 1fr}#mapwrap{order:-1}aside{border-right:0;border-top:1px solid var(--line)}#hint{font-size:11.5px;white-space:normal;width:90%;text-align:center}}
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <div class="brand"><h1>캔버스</h1><span class="draft">시안 · 가짜 데이터</span></div>
+    <div id="me">시작 전이에요<span id="ink"></span></div>
+  </header>
+  <div class="tabs"><button data-t="draw" class="on">🎨 그리기</button><button data-t="earn">🧭 물감 모으기</button></div>
+  <div class="pane" id="pane"></div>
+</aside>
+<div id="mapwrap"><div id="map"></div>
+  <div id="hint">건물 벽을 누르면 고른 색으로 한 칸 칠해져요 · 물감 1방울</div>
+  <div id="tools"><button id="orig">원래 모습 보기</button></div>
+</div>
+
+<div id="start"><div class="box">
+  <h2>학교가 캔버스예요</h2>
+  <p>cukmap 3D 학교의 벽에 모두가 함께 그림을 그려요. 칸 하나에 물감 한 방울이 들어요.</p>
+  <ul>
+    <li><b>물감은 학교에서만 모을 수 있어요.</b> 현장 퀘스트(「물감 모으기」)에 답하면 생겨요.</li>
+    <li>그림은 어디서든 그려요. 다른 사람 그림 위에 덧칠할 수도 있어요.</li>
+    <li>3D 지도가 이상해 보이면 「이상해 보여요」로 표시해 주세요. 현장 퀘스트로 넘어가요.</li>
+  </ul>
+  <label for="nick">닉네임</label><input id="nick" maxlength="12" placeholder="예) 벽화 장인">
+  <button class="go" id="startGo">시작하기 (시안이라 물감 10방울을 드려요)</button>
+</div></div>
+<div id="toast"></div>
+
+<script src="https://cukmap.com/kit/v1/cukmap.js"></script>
+<script>
+(async () => {
+const $ = id => document.getElementById(id);
+const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const PAL = ['#e8552e', '#f2c230', '#2e9b5f', '#3b7dd8', '#7a55c7', '#c2456b', '#ffffff', '#26392f'];
+let me = null, ink = 0, color = PAL[0], tab = 'draw', weird = false;
+
+// 벽 (그리기 좋은 큰 벽 몇 개) — yaw는 그 벽을 정면으로 보는 방향
+const WALLS = [
+  { name: '학생미래인재관 동쪽 벽', building: '학생미래인재관', side: '동', yaw: 1.5708, pitch: .28, zoom: 95 },
+  { name: '니콜스관 서쪽 벽', building: '니콜스관', side: '서', yaw: -1.5708, pitch: .55, zoom: 125 },
+  { name: '다솔관 북쪽 벽', building: '다솔관', side: '북', yaw: 3.1416, pitch: .55, zoom: 125 },
+  { name: '니콜스관 동쪽 벽', building: '니콜스관', side: '동', yaw: 1.5708, pitch: .55, zoom: 125 },
+];
+const map = await CUKmap.create('#map', { view: '3d', focus: '학생미래인재관', select: false });
+const FACES = {}; for (const w of WALLS) if (!FACES[w.building]) FACES[w.building] = await map.faces(w.building);
+const goWall = async w => { try { await map.setView('3d'); await map.focus({ building: w.building, yaw: w.yaw, pitch: w.pitch, zoom: w.zoom }); } catch (e) {} };
+
+// 누가 칠했는지 (시안: 미리 그려 둔 그림 + 가짜 사람들)
+const who = new Map(), cellKey = (b, s, f, c) => [b, s, f, c].join('|');
+async function put(b, s, f, c, col, nick) { who.set(cellKey(b, s, f, c), nick); await map.paint([{ building: b, side: s, floor: f, col: c, color: col }]); }
+// 미리 그린 그림: 학생미래인재관 동쪽 벽에 무지개 띠 (누군가 그리다 만 그림)
+{ const f = FACES['학생미래인재관'], side = f.sides.find(s => s.side === '동'), L = [], names = ['나무늘보', '다솔길고양이', '니콜스요정'];
+  for (let c = 0; c < side.cols; c++) for (const [y, fl] of ['3F', '2F'].entries()) { if ((c + y) % 7 > 4) continue; L.push({ building: '학생미래인재관', side: '동', floor: fl, col: c, color: PAL[(c >> 1) % 6] }); who.set(cellKey('학생미래인재관', '동', fl, c), names[c % 3]); }
+  await map.paint(L); }
+// 다른 벽에도 조금씩 (하트, 줄무늬)
+{ const f = FACES['니콜스관'], s = f.sides.find(x => x.side === '서'), L = [];
+  const HEART = ['.#.#.', '#####', '.###.', '..#..']; const rows = ['4F', '3F', '2F', '1F'];
+  HEART.forEach((r, y) => [...r].forEach((v, x) => { if (v === '#') { L.push({ building: '니콜스관', side: '서', floor: rows[y], col: 4 + x, color: '#c2456b' }); who.set(cellKey('니콜스관', '서', rows[y], 4 + x), '하트장인'); } }));
+  for (let c = 12; c < Math.min(s.cols, 20); c++) { L.push({ building: '니콜스관', side: '서', floor: '5F', col: c, color: PAL[c % 6] }); who.set(cellKey('니콜스관', '서', '5F', c), '무지개'); }
+  await map.paint(L); }
+await goWall(WALLS[0]);
+
+// 벽 누르기: 칠하기 또는 「이상해 보여요」
+const FEED = ['<b>니콜스요정</b> 님이 학생미래인재관에 3칸 칠했어요', '<b>하트장인</b> 님이 니콜스관 서쪽 벽에 하트를 그렸어요', '<b>다솔길고양이</b> 님이 현장 퀘스트로 물감 3방울을 모았어요'];
+map.on('click', async e => {
+  if (!me) { toast('먼저 시작하기를 눌러 주세요.'); return; }
+  if (weird) {
+    if (!e.building) { toast('이상해 보이는 건물이나 벽을 눌러 주세요.'); return; }
+    weird = false; drawPane(); await map.addPin({ id: 'w' + Date.now(), x: e.x, z: e.z, label: '이상해요?', color: '#e8a33a' });
+    toast('표시했어요. 현장 퀘스트로 올라가서, 누군가 확인하면 물감 2방울을 나눠 받아요.'); FEED.unshift(`<b>${esc(me.nick)}</b> 님이 ${esc(e.building.name)}에 「이상해 보여요」를 표시했어요`); drawPane(); return;
+  }
+  if (!e.building || !e.side || !e.level || e.col == null) { toast('건물 벽을 눌러 주세요. 지붕이나 땅은 칠할 수 없어요.'); return; }
+  if (ink <= 0) { toast('물감이 없어요. 「물감 모으기」에서 현장 퀘스트를 풀어 주세요.'); return; }
+  const b = e.building.name, prev = who.get(cellKey(b, e.side, e.level, e.col));
+  await put(b, e.side, e.level, e.col, color, me.nick); ink--; updMe();
+  FEED.unshift(`<b>${esc(me.nick)}</b> 님이 ${esc(b)} ${e.side}쪽 ${e.level}에 칠했어요${prev && prev !== me.nick ? ` (${esc(prev)} 님 칸 위에 덧칠)` : ''}`); if (tab === 'draw') drawPane();
+});
+
+// 물감 모으기: 탐사대 퀘스트를 그대로 가져온다
+let QUESTS = [];
+try { QUESTS = (await (await fetch('../quest/data/quests.json')).json()).quests.filter(q => !['찾기', '비교'].includes(q.type)).slice(0, 8); } catch (e) {}
+const solved = new Set();
+
+function drawPane() {
+  if (tab === 'draw') {
+    $('pane').innerHTML = `<div class="how">색을 고르고 3D 지도에서 <b>건물 벽을 누르면</b> 한 칸(약 4m × 한 층)이 칠해져요. 큰 벽으로 바로 가려면 아래에서 골라요.</div>
+      <div class="pal">${PAL.map(c => `<button data-c="${c}" class="${c === color ? 'on' : ''}" style="background:${c}" aria-label="색 ${c}"></button>`).join('')}</div>
+      <div class="row"><button id="weirdBtn" class="${weird ? 'on' : ''}">${weird ? '이상한 곳을 눌러 주세요…' : '⚠ 이상해 보여요'}</button></div>
+      <div class="walls">${WALLS.map((w, i) => `<button data-w="${i}">${w.name} <small>· ${FACES[w.building].sides.find(s => s.side === w.side).cols}칸 × ${FACES[w.building].floors.length}층</small></button>`).join('')}</div>
+      <div class="feed">${FEED.slice(0, 6).map(f => '· ' + f).join('<br>')}</div>`;
+    $('pane').querySelectorAll('.pal button').forEach(b => b.onclick = () => { color = b.dataset.c; drawPane(); });
+    $('pane').querySelectorAll('.walls button').forEach(b => b.onclick = () => goWall(WALLS[+b.dataset.w]));
+    $('weirdBtn').onclick = () => { weird = !weird; drawPane(); if (weird) toast('3D 지도가 실제와 달라 보이는 곳을 눌러 주세요.'); };
+  } else {
+    $('pane').innerHTML = `<div class="how"><b>물감은 학교에서만 모을 수 있어요.</b> 그 자리에 가서 답하면 물감 3방울. 실제로는 다른 사람 답과 같아야 확정되고, 확정된 답은 3D 지도를 고치는 데 쓰여요. (시안이라 지금은 바로 들어와요)</div>` +
+      QUESTS.map((q, i) => `<div class="q${solved.has(i) ? ' done' : ''}"><b>${esc(q.title)}</b><p>${esc(q.q)}</p>${solved.has(i) ? '<span class="ok">✓ 물감 3방울 받았어요</span>' : `<div class="opts">${q.options.slice(0, 5).map(o => `<button data-i="${i}">${esc(o)}</button>`).join('')}</div>`}</div>`).join('') +
+      (QUESTS.length ? '' : '<p>퀘스트를 불러오지 못했어요.</p>');
+    $('pane').querySelectorAll('.opts button').forEach(b => b.onclick = () => { solved.add(+b.dataset.i); ink += 3; updMe(); toast('물감 3방울! 그리기 탭에서 써 보세요.'); drawPane(); });
+  }
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; weird = false; drawPane(); });
+let orig = false; $('orig').onclick = async () => { orig = !orig; await map.showPaint(!orig); $('orig').classList.toggle('on', orig); $('orig').textContent = orig ? '그림 보기' : '원래 모습 보기'; };
+function updMe() { $('me').innerHTML = '<b></b><span id="ink"></span>'; $('me').querySelector('b').textContent = me.nick; $('ink').textContent = `🎨 물감 ${ink}방울`; }
+$('startGo').onclick = () => { const nick = $('nick').value.trim(); if (!nick) { toast('닉네임을 정해 주세요.'); return; } me = { nick }; ink = 10; $('start').remove(); updMe(); drawPane(); };
+drawPane();
+})().catch(e => { console.error(e); document.getElementById('pane').textContent = '불러오지 못했어요: ' + e.message; });
+</script>
+</body>
+</html>
