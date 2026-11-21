@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>땅따먹기 (시안)</title>
+<!-- 시안: 서버 없이 가짜 데이터로 움직인다. 칠한 땅은 이 화면에서만 바뀌고 저장되지 않는다. -->
+<style>
+:root{--g:#244f3d;--g2:#eef5ef;--o:#e8552e;--ink:#26392f;--mute:#6b7a70;--line:#dfe7e0;--bg:#f7faf7}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#fff;display:grid;grid-template-columns:380px 1fr;height:100vh;overflow:hidden}
+aside{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+#mapwrap{position:relative;min-height:300px}#map{position:absolute;inset:0}
+header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:8px}h1{font-size:19px;margin:0}
+.draft{font-size:11px;color:#9b3a16;background:#fff1ea;border-radius:6px;padding:2px 7px}
+#me{margin-top:6px;display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}#me b{color:var(--ink)}#me .pt{margin-left:auto;font-weight:800;color:var(--g)}
+.dot{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px}
+#board{position:absolute;left:12px;top:12px;z-index:5;background:#fffffff0;border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:13px;box-shadow:0 4px 16px #0001;max-width:260px}
+#board .t{font-size:11.5px;color:var(--mute);margin-bottom:3px}#board .lead{font-size:15px;font-weight:800}
+#board ol{margin:6px 0 0;padding-left:18px;color:var(--mute);font-size:12px;line-height:1.6}#board li.mine{color:var(--ink);font-weight:800}
+#tools{position:absolute;right:12px;bottom:12px;z-index:5;display:flex;gap:6px}
+#tools button{font:inherit;font-size:12.5px;padding:8px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 2px 8px #0001}
+#tools button.on{background:var(--g);color:#fff;border-color:var(--g)}
+.pane{flex:1;overflow:auto;padding:10px 14px 14px;min-height:0}
+.how{font-size:12.5px;color:#4d6355;background:var(--bg);border-radius:10px;padding:9px 11px;line-height:1.55;margin-bottom:10px}
+.bsel{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.bsel button{font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer}.bsel button.on{background:var(--g);color:#fff;border-color:var(--g)}
+/* 건물 면·층 판 */
+.grid{display:grid;gap:4px;margin-bottom:6px}
+.grid .h{font-size:11.5px;color:var(--mute);text-align:center}
+.grid .fl{font-size:11.5px;color:var(--mute);display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
+.cell{height:30px;border-radius:6px;border:1px solid #0000001a;cursor:pointer;position:relative}
+.cell.sel{outline:3px solid var(--ink);outline-offset:1px}.cell.mine::after{content:'★';position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:12px;text-shadow:0 0 2px #0008}
+.legend{font-size:11.5px;color:var(--mute);margin:2px 0 12px}
+#card{display:none;border-top:1px solid var(--line);padding:14px 16px 16px;background:var(--bg)}
+#card.show{display:block}
+#card .top{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mute)}#card .x{margin-left:auto;border:0;background:none;font-size:18px;color:var(--mute);cursor:pointer}
+#card h2{font-size:16px;margin:4px 0 4px}#card .own{font-size:13px;margin:0 0 8px}#card .q{font-size:14px;margin:0 0 8px;line-height:1.5}
+.opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.opts button{font:inherit;font-size:13px;padding:8px 12px;border:1px solid #cfdcd3;border-radius:9px;background:#fff;cursor:pointer}.opts button.on{background:var(--g);border-color:var(--g);color:#fff}
+.go{width:100%;font:inherit;font-size:14px;font-weight:800;padding:11px;border:0;border-radius:10px;background:var(--o);color:#fff;cursor:pointer}.go:disabled{background:#e9c3b7;cursor:default}
+.res{font-size:13px;line-height:1.55;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+#start{position:fixed;inset:0;z-index:50;background:#1c2b2266;display:flex;align-items:center;justify-content:center;padding:16px}
+#start .box{width:min(440px,100%);background:#fff;border-radius:16px;padding:22px;box-shadow:0 18px 50px #0003}
+#start h2{margin:0 0 6px;font-size:21px}#start p{margin:0 0 12px;color:#4d6355;font-size:14px;line-height:1.6}
+#start ul{margin:0 0 6px;padding-left:18px;font-size:13px;color:#4d6355;line-height:1.7}
+#start label{display:block;font-size:12.5px;color:var(--mute);margin:10px 0 4px}
+#start input,#start select{width:100%;font:inherit;font-size:14px;padding:10px;border:1px solid #cfdcd3;border-radius:9px;background:#fff}#start .go{margin-top:16px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d3a2c;color:#fff;font-size:13px;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60}#toast.on{opacity:1}
+@media(max-width:760px){body{grid-template-columns:1fr;grid-template-rows:50vh 1fr}#mapwrap{order:-1}aside{border-right:0;border-top:1px solid var(--line)}#board{max-width:200px;padding:7px 10px}#board ol{display:none}body.carding .pane{display:none}}
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <div class="brand"><h1>땅따먹기</h1><span class="draft">시안 · 가짜 데이터</span></div>
+    <div id="me">시작 전이에요</div>
+  </header>
+  <div class="pane" id="pane"></div>
+  <div id="card"></div>
+</aside>
+<div id="mapwrap"><div id="map"></div>
+  <div id="board"></div>
+  <div id="tools"><button id="orig">원래 모습 보기</button><button id="v3">입체</button><button id="v2">평면</button></div>
+</div>
+
+<div id="start"><div class="box">
+  <h2>학교 땅따먹기</h2>
+  <p>니콜스관 일대 건물의 벽을 우리 과 색으로 칠해요. 벽은 <b>면(동서남북) × 층</b>으로 나뉘어 있어요.</p>
+  <ul>
+    <li>칸을 차지하려면 <b>그 벽에 대한 질문</b>에 답해야 해요. 직접 가서 봐야 풀려요.</li>
+    <li>다른 과 땅도 질문에 답하면 빼앗을 수 있어요.</li>
+    <li>모인 답은 cukmap 3D 지도를 고치는 데 쓰여요.</li>
+  </ul>
+  <label for="nick">닉네임</label><input id="nick" maxlength="12" placeholder="예) 니콜스 정복자">
+  <label for="dept">학과</label><select id="dept"></select>
+  <button class="go" id="startGo">시작하기</button>
+</div></div>
+<div id="toast"></div>
+
+<script src="https://cukmap.com/kit/v1/cukmap.js"></script>
+<script>
+(async () => {
+const $ = id => document.getElementById(id);
+const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const DEPTS = ['경영학과','경제학과','국사학과','국어국문학과','국제학부','법학과','사회복지학과','사회학과','심리학과','아동학과','영어영문학부','음악과','일어일본문화학과','중국언어문화학과','철학과','특수교육과','프랑스어문화학과','행정학과','회계학과','자유전공학부','AI의공학과','공간디자인소비자학과','데이터사이언스학과','물리학과','미디어기술콘텐츠학과','바이오로직스공학부','바이오메디컬소프트웨어학과','바이오메디컬화학공학과','생명공학과','수학과','식품영양학과','약학대학','에너지환경공학과','의류학과','의생명과학과','인공지능학과','정보통신전자공학부','컴퓨터정보공학부','화학과'];
+const PAL = ['#e8552e','#3b7dd8','#2e9b5f','#c2456b','#d99a1e','#7a55c7','#1f9aa8','#8a5a2b','#d1477a','#5b8f2a','#4a5fc1','#b8732e'];
+const hash = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+const COL = {}; const colorOf = d => COL[d] || (COL[d] = PAL.find(c => !Object.values(COL).includes(c)) || PAL[hash(d) % PAL.length]);
+const BLD = ['니콜스관', '학생미래인재관', '다솔관', '밤비노관', '비르투스관'];
+let me = null, myCells = 0;
+
+// 지도와 벽 칸 목록
+const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관' });
+const F = {}; for (const b of BLD) F[b] = await map.faces(b);
+const key = (b, s, f) => b + '|' + s + '|' + f;
+// 가짜 시작 상태: 몇몇 학과가 이미 칸을 차지하고 있음
+const FAKE = ['컴퓨터정보공학부', '경영학과', '심리학과', '수학과', '국어국문학과', '인공지능학과', '법학과'];
+FAKE.forEach(colorOf); // 학과마다 겹치지 않는 색
+const owner = new Map();
+for (const b of BLD) for (const s of F[b].sides) for (const f of F[b].floors) {
+  const h = hash(key(b, s.side, f)) % 10; if (h < 6) owner.set(key(b, s.side, f), FAKE[hash(f + s.side + b) % FAKE.length]);
+}
+const total = BLD.reduce((n, b) => n + F[b].sides.length * F[b].floors.length, 0);
+const repaint = async () => { const L = []; for (const [k, d] of owner) { const [building, side, floor] = k.split('|'); L.push({ building, side, floor, color: colorOf(d) }); } await map.clearPaint(); await map.paint(L); };
+await repaint();
+
+// 질문: 칸(건물·면·층)마다 만든다. 아래층은 「땅과 만나는 모습」, 위층은 「창문」
+const question = (b, s, f) => {
+  const fl = F[b].floors, i = fl.indexOf(f);
+  if (i <= 1) return { q: `${b} ${s}쪽 벽의 ${f}은(는) 밖에서 어떻게 보여요?`, o: ['땅 위로 다 보여요', '반쯤 땅에 묻혀 있어요', '땅속이라 안 보여요', '여기로 들어가는 문이 있어요'] };
+  if (i === fl.length - 1) return { q: `${b} ${s}쪽 벽의 맨 위층(${f})은 아래층과 같은 모양이에요?`, o: ['같아요', '안쪽으로 들어가 있어요', '이 층이 없어요', '모양이 완전히 달라요'] };
+  return { q: `${b} ${s}쪽 벽의 ${f}에는 창문이 몇 개쯤 보여요?`, o: ['없어요', '1~5개', '6~10개', '11개 이상'] };
+};
+
+// 왼쪽: 건물 고르기 + 면·층 판
+let curB = '니콜스관', sel = null;
+function standings() { const c = {}; for (const d of owner.values()) c[d] = (c[d] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]); }
+function drawBoard() {
+  const st = standings(), lead = st[0];
+  $('board').innerHTML = `<div class="t">니콜스관 일대 · 칸 ${total}개 중 ${owner.size}개 차지됨</div>
+    <div class="lead"><span class="dot" style="background:${colorOf(lead[0])}"></span> 1위 ${esc(lead[0])} ${lead[1]}칸</div>
+    <ol>${st.slice(1, 5).map(([d, n]) => `<li class="${me && d === me.dept ? 'mine' : ''}"><span class="dot" style="background:${colorOf(d)}"></span> ${esc(d)} ${n}칸</li>`).join('')}
+    ${me && !st.slice(0, 5).some(([d]) => d === me.dept) ? `<li class="mine" value="${st.findIndex(([d]) => d === me.dept) + 1 || st.length + 1}"><span class="dot" style="background:${colorOf(me.dept)}"></span> ${esc(me.dept)} ${(st.find(([d]) => d === me.dept) || [0, 0])[1]}칸</li>` : ''}</ol>`;
+}
+function drawPane() {
+  const f = F[curB], sides = f.sides.map(s => s.side), floors = [...f.floors].reverse();
+  let h = `<div class="how">칸을 누르거나 3D 지도에서 <b>건물 벽을 직접 눌러</b> 골라요. 빈 칸은 아직 아무 과도 차지하지 않은 곳이에요.</div>
+    <div class="bsel">${BLD.map(b => `<button data-b="${b}" class="${b === curB ? 'on' : ''}">${b}</button>`).join('')}</div>
+    <div class="grid" style="grid-template-columns:34px repeat(${sides.length},1fr)"><span></span>${sides.map(s => `<span class="h">${s}쪽</span>`).join('')}`;
+  for (const fl of floors) { h += `<span class="fl">${fl}</span>`; for (const s of sides) { const k = key(curB, s, fl), d = owner.get(k);
+    h += `<span class="cell${sel === k ? ' sel' : ''}${me && d === me.dept ? ' mine' : ''}" data-k="${k}" title="${d ? esc(d) : '빈 칸'}" style="background:${d ? colorOf(d) : '#f1f4f1'}"></span>`; } }
+  h += `</div><div class="legend">★ 우리 과 칸 · 회색 = 빈 칸</div>`;
+  $('pane').innerHTML = h;
+  $('pane').querySelectorAll('.bsel button').forEach(b => b.onclick = async () => { curB = b.dataset.b; sel = null; drawPane(); try { await map.focus({ building: curB }); } catch (e) {} });
+  $('pane').querySelectorAll('.cell').forEach(c => c.onclick = () => { const [b, s, f] = c.dataset.k.split('|'); pick(b, s, f); });
+}
+
+// 칸 고르기 → 질문 → 차지
+async function pick(b, s, f) {
+  if (!me) { toast('먼저 닉네임과 학과를 정해 주세요.'); return; }
+  curB = b; sel = key(b, s, f); drawPane();
+  const k = sel, d = owner.get(k), Q = question(b, s, f);
+  const c = $('card'); c.classList.add('show'); document.body.classList.add('carding');
+  c.innerHTML = `<div class="top"><span>${esc(b)} · ${s}쪽 · ${f}</span><button class="x" aria-label="닫기">×</button></div>
+    <h2>${d === (me && me.dept) ? '우리 과 땅이에요' : d ? '다른 과 땅이에요' : '빈 땅이에요'}</h2>
+    <p class="own">${d ? `<span class="dot" style="background:${colorOf(d)}"></span> ${esc(d)}` : '아직 아무도 차지하지 않았어요.'}</p>
+    ${d === me.dept ? `<div class="res">지키려면 우리 과 사람들이 이 칸 질문에 계속 같은 답을 남기면 돼요.</div>` :
+    `<p class="q"></p><div class="opts">${Q.o.map(o => `<button>${esc(o)}</button>`).join('')}</div><button class="go" disabled>${d ? '답하고 빼앗기' : '답하고 차지하기'}</button>`}`;
+  const qq = c.querySelector('.q'); if (qq) qq.textContent = Q.q;
+  c.querySelector('.x').onclick = () => { c.classList.remove('show'); document.body.classList.remove('carding'); sel = null; drawPane(); };
+  let ans = null; const go = c.querySelector('.go');
+  c.querySelectorAll('.opts button').forEach(o => o.onclick = () => { ans = o.textContent; c.querySelectorAll('.opts button').forEach(x => x.classList.toggle('on', x === o)); go.disabled = false; });
+  if (go) go.onclick = async () => {
+    owner.set(k, me.dept); myCells++; await map.paint([{ building: b, side: s, floor: f, color: colorOf(me.dept) }]);
+    c.innerHTML = `<div class="top"><span>${esc(b)} · ${s}쪽 · ${f}</span><button class="x" aria-label="닫기">×</button></div><h2>차지했어요!</h2>
+      <div class="res">남긴 답: <b>${esc(ans)}</b><br>시안에서는 바로 칠해져요. 실제로는 <b>다른 사람 답과 같아야</b> 확정되고, 확정된 답은 3D 지도를 고치는 근거로 올라가요.</div>`;
+    c.querySelector('.x').onclick = () => { c.classList.remove('show'); document.body.classList.remove('carding'); sel = null; drawPane(); };
+    updMe(); drawBoard(); drawPane(); toast(`${me.dept} +1칸!`);
+  };
+}
+map.on('click', e => {
+  if (!e.building || !e.side || !e.level) { if (e.building) toast('벽을 눌러 주세요. 지붕이나 땅은 칸이 아니에요.'); return; }
+  const b = BLD.find(x => (e.building.name || '').includes(x)); if (!b) { toast('이번 시안은 니콜스관 일대 5개 건물만 칠할 수 있어요.'); return; }
+  pick(b, e.side, e.level);
+});
+
+// 보기 버튼
+let orig = false;
+$('orig').onclick = async () => { orig = !orig; await map.showPaint(!orig); $('orig').classList.toggle('on', orig); $('orig').textContent = orig ? '칠한 색 보기' : '원래 모습 보기'; };
+$('v3').onclick = () => map.setView('3d'); $('v2').onclick = () => { map.setView('2d'); toast('평면에서는 칠한 색이 안 보여요. 입체로 돌아가 보세요.'); };
+
+// 시작
+$('dept').innerHTML = '<option value="">학과를 골라 주세요</option>' + DEPTS.map(d => `<option>${d}</option>`).join('');
+function updMe() { $('me').innerHTML = `<span class="dot" style="background:${colorOf(me.dept)}"></span> <b></b> · ${esc(me.dept)}<span class="pt">내가 차지 ${myCells}칸</span>`; $('me').querySelector('b').textContent = me.nick; }
+$('startGo').onclick = () => { const nick = $('nick').value.trim(), dept = $('dept').value; if (!nick || !dept) { toast('닉네임과 학과를 모두 정해 주세요.'); return; } me = { nick, dept }; $('start').remove(); updMe(); drawBoard(); drawPane(); };
+drawBoard(); drawPane();
+})().catch(e => { console.error(e); document.getElementById('pane').textContent = '불러오지 못했어요: ' + e.message; });
+</script>
+</body>
+</html>
