@@ -102,7 +102,7 @@ function openCat(c) {
   if (s.got) {
     card.innerHTML = `<div class="top"><span>${c.spot}</span><button class="x">×</button></div><h2>${c.face} ${c.name}</h2>
       <p class="stars">${stars(s.tries)}</p><p>${c.hint}</p>
-      <div class="btns"><button id="seeGround">지상 시점으로 그 자리 보기</button><button id="seeMap">지도로 보기</button></div>
+      <div class="btns"><button id="seeGround">지상 시점으로 그 자리 보기</button><button id="seeMap">입체로 보기</button></div>
       <p style="font-size:12px;color:#6b7a70;margin-top:8px">실제로 그 자리에 가서 고양이 사진을 찍으면 "직접 만남" 표시가 붙는 기능을 넣을 수 있어요(현장 인증).</p>`;
     card.querySelector('#seeGround').onclick = async () => { try { await map.walkAt({ x: c.at[0], z: c.at[1] + 6, look: { x: c.at[0], z: c.at[1] } }); } catch (e) { toast('지상 시점을 열지 못했어요: ' + e.message); } };
     card.querySelector('#seeMap').onclick = async () => { await map.setView('3d'); setV('3d'); await map.focus({ x: c.at[0], z: c.at[1], zoom: 80 }); };
@@ -110,7 +110,8 @@ function openCat(c) {
     card.innerHTML = `<div class="top"><span>찾는 중 · 틀린 횟수 ${s.tries}</span><button class="x">×</button></div><h2>${c === LEGEND ? '🌟 전설의 고양이' : '❓ 이 고양이는 어디에?'}</h2>
       <div class="hint">${c.hint}</div><div class="hint hot" id="hot" style="display:none"></div>
       <p style="font-size:12.5px;color:#6b7a70">지도에서 그곳을 눌러 보세요. (${NEAR}m 안이면 찾아요)</p>`;
-    $('hintbar').textContent = '지도에서 고양이가 있을 곳을 눌러 보세요';
+    $('hintbar').textContent = '평면 지도에서 고양이가 있을 곳을 눌러 보세요 (찾으면 입체로 보여 줘요)';
+    map.setView('2d').then(() => setV('2d'));
   }
   card.querySelector('.x').onclick = () => { card.classList.remove('show'); document.body.classList.remove('carding'); cur = null; drawBook(); };
 }
@@ -120,6 +121,8 @@ map.on('click', async e => {
   if (d <= NEAR) {
     s.got = true; await map.addPin({ id: c.id, x: c.at[0], z: c.at[1], label: c.face + ' ' + c.name, color: '#e0a100' });
     toast(`${josa(c.name, '을', '를')} 찾았어요! ${stars(s.tries)}`); drawProg(); openCat(c);
+    try { await map.setView('3d'); setV('3d'); await map.focus({ x: c.at[0], z: c.at[1], zoom: 70 }); } catch (e) {}
+    $('hintbar').textContent = '찾은 고양이가 사는 곳을 입체로 보여 드려요. 도감에서 다음 고양이를 골라 보세요';
     if (c !== LEGEND && allGot()) setTimeout(() => toast('모든 고양이를 모았어요… 어디선가 전설의 고양이 소리가 들려요!'), 2900);
   } else {
     s.tries++; const h = $('hot'); h.style.display = 'block';
