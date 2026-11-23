@@ -29,7 +29,10 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 .opts{display:flex;flex-wrap:wrap;gap:5px}.opts button{font:inherit;font-size:12.5px;padding:6px 10px;border:1px solid #cfdcd3;border-radius:8px;background:#fff;cursor:pointer}
 .q.done{opacity:.6}.q .ok{font-size:12.5px;color:#1f6b3a;font-weight:700}
 #zb{position:absolute;right:12px;bottom:12px;z-index:5;display:flex;flex-direction:column;gap:6px}#zb button{width:42px;height:42px;font-size:20px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 2px 8px #0001}
-#hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:5;background:#1d3a2ce8;color:#fff;font-size:12.5px;padding:8px 13px;border-radius:10px;max-width:92%;text-align:center}
+#wbar{position:absolute;left:12px;top:12px;z-index:5;display:flex;background:#fff;border:1px solid var(--line);border-radius:11px;padding:3px;box-shadow:0 4px 14px #0001}#wbar button,#fbar button{font:inherit;font-size:13px;padding:7px 11px;border:0;border-radius:8px;background:none;cursor:pointer;color:var(--ink)}#wbar button.on,#fbar button.on{background:var(--g);color:#fff;font-weight:800}
+#fbar{position:absolute;left:12px;top:60px;z-index:5;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:11px;padding:3px;box-shadow:0 4px 14px #0001}#fbar[hidden]{display:none}
+#labels span.room{font-size:10.5px;font-weight:600;background:#fffffff0;color:#4d6355;transform:translate(-50%,-50%)}
+#hint{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;background:#1d3a2ce8;color:#fff;font-size:12.5px;padding:8px 13px;border-radius:10px;max-width:92%;text-align:center}
 #load{position:absolute;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;background:#eef1ee;font-size:14px;color:#4d6355;text-align:center;line-height:1.6;padding:20px}
 #hidden{position:absolute;left:-2000px;top:0;width:600px;height:400px}
 #start{position:fixed;inset:0;z-index:50;background:#1c2b2266;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -54,6 +57,7 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 </aside>
 <div id="stage">
   <canvas id="gl"></canvas><div id="labels"></div><div id="zb"><button id="zin" aria-label="확대">＋</button><button id="zout" aria-label="축소">－</button></div>
+  <div id="wbar"><button data-w="out" class="on">🏫 바깥</button><button data-w="in">🚪 니콜스관 안</button></div><div id="fbar" hidden></div>
   <div id="hint">드래그로 돌리고, 휠·두 손가락으로 확대해요 · 누르면 그 픽셀이 칠해져요</div>
   <div id="load">cukmap 지도에서 지형과 건물 모양을 받아<br>1m 블록 세상으로 바꾸는 중이에요…</div>
   <div id="hidden"></div>
@@ -61,9 +65,10 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 
 <div id="start"><div class="box">
   <h2>학교 색칠놀이</h2>
-  <p>니콜스관 일대를 1m 블록으로 만든 흑백 학교예요. 모두 함께 색을 입혀요.</p>
+  <p>니콜스관 일대를 블록으로 만든 흑백 학교예요. <b>바깥</b>도, <b>니콜스관 안</b>(층별 강의실·복도)도 모두 함께 색을 입혀요.</p>
   <ul>
-    <li>블록 면 하나(1m)가 8×8 픽셀로 나뉘어 있어요. 벽·지붕·땅·계단 어디든 그릴 수 있어요.</li>
+    <li>픽셀 하나는 12.5cm. 벽·지붕·땅, 강의실 벽과 복도 바닥 어디든 그릴 수 있어요.</li>
+    <li><b>그리기</b>와 <b>탐방</b> 두 가지로 놀아요. 탐방에서는 누가 어디에 무엇을 남겼는지 둘러봐요.</li>
     <li><b>물감은 학교에서만 모아요.</b> 「물감 모으기」의 현장 퀘스트에 답하면 픽셀이 생겨요.</li>
     <li>블록 세상은 cukmap 지도 데이터로 자동으로 만들어져서, 지도가 고쳐지면 같이 바뀌어요.</li>
   </ul>
@@ -79,20 +84,99 @@ const $ = id => document.getElementById(id);
 const toast = t => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 2600); };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const PAL = ['#e8552e', '#f2c230', '#2e9b5f', '#3b7dd8', '#7a55c7', '#c2456b', '#8fd0ff', '#ff9ec7', '#8a5a2b', '#ffffff', '#9aa39d', '#26392f'];
-let me = null, ink = 0, color = PAL[0], tab = 'draw', mode = 'paint';
+let me = null, ink = 0, color = PAL[0], tab = 'draw', mode = 'paint', play = 'draw', dirty = true;
+const inPoly = (x, z, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
 
-// ---------- 1. 지도에서 모양 받기 (숨긴 지도 부품) ----------
-const AREA = { x0: -70, z0: 0, x1: 125, z1: 175, step: 1 };
+// ---------- 1. 지도에서 모양 받기 (숨긴 지도 부품). 실내 도면도 이때 함께 — 저장소에 복사하지 않고 화면에만 쓴다 ----------
+const AREA = { x0: -70, z0: 0, x1: 125, z1: 175, step: 1, indoor: '니콜스관' };
 const kit = await CUKmap.create('#hidden', { view: '2d', ui: false, select: false });
 const S = await kit.shape(AREA);
-document.querySelector('#hidden iframe').remove(); // 모양만 받고 지도 부품은 닫는다
+document.querySelector('#hidden iframe').remove();
 
-// ---------- 2. 1m 블록 세상 만들기 ----------
+// ---------- 2. 블록 세상 공통 틀: 칸 격자 → 보이는 면 → 면마다 SUB×SUB 픽셀 그림판 ----------
+const cv = $('gl'), gl = cv.getContext('webgl2', { antialias: true });
+if (!gl) { $('load').textContent = '이 브라우저에서는 블록 세상을 그릴 수 없어요(WebGL2 필요).'; return; }
+const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, `#version 300 es
+in vec3 p;in vec3 c;in vec2 t;in float s;uniform mat4 m;uniform vec3 eye;out vec3 vc;out vec2 vt;out float vs;out float fd;
+void main(){gl_Position=m*vec4(p,1.);vc=c;vt=t;vs=s;fd=distance(p,eye);}`));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `#version 300 es
+precision highp float;in vec3 vc;in vec2 vt;in float vs;in float fd;uniform sampler2D tex;uniform float show;uniform vec2 tsz;out vec4 o;
+void main(){vec4 q=texture(tex,vt);vec3 c=(q.a>.5&&show>.5)?q.rgb*(vs*.88+.12):vc;
+ vec2 g=fract(vt*tsz);float e=min(min(g.x,1.-g.x),min(g.y,1.-g.y));float near=1.-smoothstep(3.,9.,fd);c*=1.-.12*near*(1.-smoothstep(.0,.06,e));
+ float f=clamp((fd-260.)/500.,0.,.7);o=vec4(mix(c,vec3(.93,.95,.93),f),1.);}`));
+gl.linkProgram(prog); gl.useProgram(prog);
+const uM = gl.getUniformLocation(prog, 'm'), uE = gl.getUniformLocation(prog, 'eye'), uS = gl.getUniformLocation(prog, 'show'), uT = gl.getUniformLocation(prog, 'tsz');
+gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0);
+gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
+const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+const SHADE = [.80, .74, 1.0, .5, .86, .70];
+const CORNERS = [ // c0→c3 = 그림판 가로, c0→c1 = 세로
+  [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
+  [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
+  [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]]];
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const MAXT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+
+// o: { NX, NY, NZ, cell, ox, oy, oz, V(Uint8Array 종류), gray(종류, 방향, 칸) → 밝기, SUB, layers(층마다 칸 높이 범위) }
+function makeWorld(o) {
+  const { NX, NY, NZ, cell, ox, oy, oz, V } = o; let SUB = o.SUB;
+  const vi = (i, y, j) => (j * NY + y) * NX + i;
+  const W = { ...o, maxY: NY, vi };
+  W.solid = (i, y, j) => i >= 0 && j >= 0 && y >= 0 && i < NX && j < NZ && y < W.maxY && V[vi(i, y, j)] > 0;
+  const F = []; const yEnd = new Int32Array(NY + 1); // 높이 순서로 면을 모은다 → 층을 잘라 보여 줄 때 앞부분만 그리면 됨
+  for (let y = 0; y < NY; y++) { yEnd[y] = F.length; for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) { const t = V[vi(i, y, j)]; if (!t || (o.skip && o.skip(i, y, j, t))) continue;
+    for (let d = 0; d < 6; d++) { if (d === 3 && !o.bottoms) continue; const [a, b, c] = DIRS[d]; const ni = i + a, ny = y + b, nj = j + c;
+      const open = !(ni >= 0 && nj >= 0 && ny >= 0 && ni < NX && nj < NZ && ny < NY && V[vi(ni, ny, nj)] > 0); if (open) F.push([i, y, j, d, t]); } } }
+  yEnd[NY] = F.length; W.F = F; W.yEnd = yEnd;
+  W.faceIndex = new Map(); F.forEach((f, k) => W.faceIndex.set(vi(f[0], f[1], f[2]) * 6 + f[3], k));
+  const TW = Math.min(4096, MAXT); while (SUB > 2 && Math.ceil(F.length / (TW / SUB)) * SUB > MAXT) SUB /= 2;
+  const PER = TW / SUB, TH = Math.max(SUB, Math.ceil(F.length / PER) * SUB);
+  Object.assign(W, { SUB, TW, TH, PER, TEX: new Uint8Array(TW * TH * 4), who: new Map() });
+  const pos = new Float32Array(F.length * 12), col = new Float32Array(F.length * 12), uv = new Float32Array(F.length * 8), shd = new Float32Array(F.length * 4), idx = new Uint32Array(F.length * 6);
+  F.forEach((f, k) => { const [i, y, j, d, t] = f, tx = (k % PER) * SUB, ty = Math.floor(k / PER) * SUB, e = .2;
+    const u0 = (tx + e) / TW, u1 = (tx + SUB - e) / TW, v0 = (ty + e) / TH, v1 = (ty + SUB - e) / TH, UV = [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
+    const g = o.gray(t, d, i, y, j), rgb = Array.isArray(g) ? g : [g, g, g];
+    CORNERS[d].forEach((c, n) => { pos.set([ox + (i + c[0]) * cell, oy + (y + c[1]) * cell, oz + (j + c[2]) * cell], k * 12 + n * 3); uv.set(UV[n], k * 8 + n * 2); shd[k * 4 + n] = SHADE[d]; col.set(rgb, k * 12 + n * 3); });
+    idx.set([k * 4, k * 4 + 1, k * 4 + 2, k * 4, k * 4 + 2, k * 4 + 3], k * 6); });
+  W.vao = gl.createVertexArray(); gl.bindVertexArray(W.vao);
+  const buf = (data, attr, n) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); const l = gl.getAttribLocation(prog, attr); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); };
+  buf(pos, 'p', 3); buf(col, 'c', 3); buf(uv, 't', 2); buf(shd, 's', 1);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.bindVertexArray(null);
+  W.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, W.tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TW, TH, 0, gl.RGBA, gl.UNSIGNED_BYTE, W.TEX);
+  W.upRect = (x, y, w, h) => { const a = new Uint8Array(w * h * 4); for (let r = 0; r < h; r++) a.set(W.TEX.subarray(((y + r) * TW + x) * 4, ((y + r) * TW + x + w) * 4), r * w * 4); gl.bindTexture(gl.TEXTURE_2D, W.tex); gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a); dirty = true; };
+  W.refresh = () => { gl.bindTexture(gl.TEXTURE_2D, W.tex); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TW, TH, gl.RGBA, gl.UNSIGNED_BYTE, W.TEX); dirty = true; };
+  W.texel = (k, a, b) => [(k % PER) * SUB + a, Math.floor(k / PER) * SUB + b];
+  W.draw = () => { gl.bindVertexArray(W.vao); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, W.tex); gl.uniform2f(uT, TW, TH); gl.drawElements(gl.TRIANGLES, W.yEnd[W.maxY] * 6, gl.UNSIGNED_INT, 0); gl.bindVertexArray(null); };
+  // 누른 곳: 화면 → 광선 → 칸 격자를 한 칸씩 (DDA)
+  W.pick = (EYE, dir) => {
+    let gx = (EYE[0] - ox) / cell, gy = (EYE[1] - oy) / cell, gz = (EYE[2] - oz) / cell, i = Math.floor(gx), Y = Math.floor(gy), j = Math.floor(gz);
+    const st = dir.map(v => v > 0 ? 1 : -1), tD = dir.map(v => Math.abs(cell / (v || 1e-9)));
+    let tM = [((st[0] > 0 ? i + 1 : i) - gx) * cell / (dir[0] || 1e-9), ((st[1] > 0 ? Y + 1 : Y) - gy) * cell / (dir[1] || 1e-9), ((st[2] > 0 ? j + 1 : j) - gz) * cell / (dir[2] || 1e-9)];
+    let last = -1, tHit = 0;
+    for (let n = 0; n < 6000; n++) {
+      if (W.solid(i, Y, j)) { const d = last === 0 ? (st[0] > 0 ? 1 : 0) : last === 1 ? (st[1] > 0 ? 3 : 2) : (st[2] > 0 ? 5 : 4); const k = W.faceIndex.get(vi(i, Y, j) * 6 + d); if (k == null || k >= W.yEnd[W.maxY]) return null;
+        const hp = [EYE[0] + dir[0] * tHit, EYE[1] + dir[1] * tHit, EYE[2] + dir[2] * tHit], f = F[k], c = CORNERS[f[3]], p0 = [ox + (f[0] + c[0][0]) * cell, oy + (f[1] + c[0][1]) * cell, oz + (f[2] + c[0][2]) * cell];
+        const r = sub(hp, p0), cl = v => Math.max(0, Math.min(SUB - 1, Math.floor(v / cell * SUB)));
+        return { k, a: cl(dot(r, sub(c[3], c[0]))), b: cl(dot(r, sub(c[1], c[0]))), hp }; }
+      const ax = tM[0] < tM[1] ? (tM[0] < tM[2] ? 0 : 2) : (tM[1] < tM[2] ? 1 : 2); tHit = tM[ax];
+      if (ax === 0) { i += st[0]; tM[0] += tD[0]; } else if (ax === 1) { Y += st[1]; tM[1] += tD[1]; } else { j += st[2]; tM[2] += tD[2]; }
+      last = ax; if (Y < -2 && st[1] < 0) return null; if (tHit > 2000) return null;
+    }
+    return null;
+  };
+  return W;
+}
+
+// ---------- 3. 바깥 세상 (1m 블록) ----------
 const NX = S.nx, NZ = S.nz, HG = S.heights.map(v => Math.round(v));
 let yMin = Math.min(...HG) - 2, yMax = Math.max(...HG);
-const inPoly = (x, z, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
-const cols = []; // 건물 기둥: [i, j, y0, y1, 건물번호]
-const LABEL = [];
+const cols = [], LABEL = [];
 S.buildings.forEach((b, bi) => {
   let sx = 0, sz = 0, n = 0, top = -1e9;
   for (const p of b.parts) {
@@ -103,82 +187,51 @@ S.buildings.forEach((b, bi) => {
       const x = S.x0 + i + .5, z = S.z0 + j + .5;
       if (!inPoly(x, z, p.poly) || (p.holes || []).some(h => inPoly(x, z, h))) continue;
       const g = HG[j * NX + i], y0 = p.bottom != null ? Math.round(p.bottom) : g + 1, y1 = Math.round(p.top);
-      if (y1 > y0) { cols.push([i, j, y0, y1, bi]); yMax = Math.max(yMax, y1); sx += x; sz += z; n++; top = Math.max(top, y1); }
+      if (y1 > y0) { cols.push([i, j, y0, y1]); yMax = Math.max(yMax, y1); sx += x; sz += z; n++; top = Math.max(top, y1); }
     }
   }
   if (n) LABEL.push({ name: b.name, x: sx / n, z: sz / n, y: top + 2 });
 });
-const NY = yMax - yMin + 2;
-const V = new Uint8Array(NX * NY * NZ); // 0 빈칸, 1 땅, 2 건물
-const vi = (i, y, j) => (j * NY + (y - yMin)) * NX + i;
-for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) for (let y = yMin; y <= HG[j * NX + i]; y++) V[vi(i, y, j)] = 1;
-for (const [i, j, y0, y1] of cols) for (let y = y0; y < y1; y++) V[vi(i, y, j)] = 2;
-const solid = (i, y, j) => i >= 0 && j >= 0 && i < NX && j < NZ && y >= yMin && y < yMin + NY && V[vi(i, y, j)] > 0;
+const ONY = yMax - yMin + 2, OV = new Uint8Array(NX * ONY * NZ), ovi = (i, y, j) => (j * ONY + (y - yMin)) * NX + i;
+for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) for (let y = yMin; y <= HG[j * NX + i]; y++) OV[ovi(i, y, j)] = 1;
+for (const [i, j, y0, y1] of cols) for (let y = y0; y < y1; y++) OV[ovi(i, y, j)] = 2;
+const OUT = makeWorld({ NX, NY: ONY, NZ, cell: 1, ox: S.x0, oy: yMin, oz: S.z0, V: OV, SUB: 8,
+  skip: (i, y, j, t) => t === 1 && y + yMin < HG[j * NX + i] - 3,
+  gray: (t, d, i, y, j) => (t === 2 ? .93 : .72) * SHADE[d] * (((i + y + j) & 1) ? 1 : .955) });
+OUT.name = '바깥'; OUT.labels = () => LABEL.map(l => ({ text: l.name, x: l.x, y: l.y, z: l.z }));
 
-// 보이는 면만 모은다. 면 = 칠할 수 있는 한 칸
-const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-const SHADE = [.80, .74, 1.0, .5, .86, .70]; // 방향마다 밝기 (흑백 색칠놀이 느낌)
-const F = []; // [i, y, j, d, 종류]
-for (let j = 0; j < NZ; j++) for (let i = 0; i < NX; i++) for (let y = yMin; y < yMin + NY; y++) {
-  const t = V[vi(i, y, j)]; if (!t) continue;
-  for (let d = 0; d < 6; d++) { if (d === 3) continue; const [a, b, c] = DIRS[d]; if (!solid(i + a, y + b, j + c) && !(d !== 2 && t === 1 && y < HG[j * NX + i] - 3)) F.push([i, y, j, d, t]); }
+// ---------- 4. 니콜스관 안 (0.5m 블록, 층마다 7칸 = 3.5m) ----------
+let IN = null;
+if (S.indoor) {
+  const D = S.indoor, C = .5, FL = 7, [bx0, bz0, bx1, bz1] = D.bounds, floors = D.floors;
+  const INX = Math.ceil((bx1 - bx0) / C) + 2, INZ = Math.ceil((bz1 - bz0) / C) + 2, INY = floors.length * FL, IV = new Uint8Array(INX * INY * INZ);
+  const ivi = (i, y, j) => (j * INY + y) * INX + i, ci = x => Math.floor((x - bx0) / C) + 1, cj = z => Math.floor((z - bz0) / C) + 1;
+  const seg = (x1, z1, x2, z2, fn) => { const L = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.ceil(L / .15)); for (let q = 0; q <= n; q++) { const i = ci(x1 + (x2 - x1) * q / n), j = cj(z1 + (z2 - z1) * q / n); if (i >= 0 && j >= 0 && i < INX && j < INZ) fn(i, j); } };
+  // 종류: 4 바닥, 3 벽, 5 창, 6 계단 자리
+  floors.forEach((f, k) => { const y0 = k * FL, wallTop = f.id === 'RF' ? 2 : FL - 1;
+    if (f.slab) for (let j = 0; j < INZ; j++) for (let i = 0; i < INX; i++) { const x = bx0 + (i - .5) * C, z = bz0 + (j - .5) * C; if (inPoly(x, z, f.slab)) IV[ivi(i, y0, j)] = 4; }
+    for (let q = 0; q < f.walls.length; q += 4) seg(f.walls[q], f.walls[q + 1], f.walls[q + 2], f.walls[q + 3], (i, j) => { for (let y = 1; y <= wallTop; y++) IV[ivi(i, y0 + y, j)] = 3; });
+    for (let q = 0; q < f.wins.length; q += 4) seg(f.wins[q], f.wins[q + 1], f.wins[q + 2], f.wins[q + 3], (i, j) => { for (let y = 2; y <= Math.min(5, wallTop); y++) if (IV[ivi(i, y0 + y, j)] === 3) IV[ivi(i, y0 + y, j)] = 5; });
+    for (const dr of f.doors) { const [x1, z1, x2, z2] = dr, mx = (x1 + x2) / 2, mz = (z1 + z2) / 2, w = Math.max(dr[4] || 1, .9) / 2, L = Math.hypot(x2 - x1, z2 - z1) || 1, ux = (x2 - x1) / L, uz = (z2 - z1) / L;
+      // 문: 문짝 선을 따라 벽을 뚫는다(높이 2m)
+      for (let a = -w; a <= w; a += .2) for (let b = -.35; b <= .35; b += .2) { const i = ci(mx + ux * a - uz * b), j = cj(mz + uz * a + ux * b); if (i >= 0 && j >= 0 && i < INX && j < INZ) for (let y = 1; y <= 4; y++) if (IV[ivi(i, y0 + y, j)] >= 3) IV[ivi(i, y0 + y, j)] = 0; } }
+    for (const s of f.stairs) for (let a = -1.25; a <= 1.25; a += .5) for (let b = -1.25; b <= 1.25; b += .5) { const i = ci(s.x + a), j = cj(s.z + b); if (i >= 0 && j >= 0 && i < INX && j < INZ && IV[ivi(i, y0, j)] === 4) IV[ivi(i, y0, j)] = 6; }
+  });
+  IN = makeWorld({ NX: INX, NY: INY, NZ: INZ, cell: C, ox: bx0 - C, oy: floors[0].y - C, oz: bz0 - C, V: IV, SUB: 4,
+    gray: (t, d, i, y, j) => t === 5 ? [.80 * SHADE[d], .86 * SHADE[d], .92 * SHADE[d]] : t === 6 ? .62 * SHADE[d] : (t === 4 ? .70 : .97) * SHADE[d] * (((i + y + j) & 1) ? 1 : .965) });
+  IN.name = '니콜스관 안'; IN.floors = floors; IN.FL = FL; IN.cur = 2;
+  IN.setFloor = k => { IN.cur = k; IN.maxY = (k + 1) * FL; dirty = true; drawFloorBar(); };
+  IN.labels = () => (floors[IN.cur].labels || []).filter(l => /^N\d/.test(l.id) || l.name === '계단').map(l => ({ text: /^N\d/.test(l.id) ? l.id : l.name, x: l.x, z: l.z, y: floors[IN.cur].y + 1, room: true }));
+  IN.setFloor(2);
 }
-const faceIndex = new Map(); F.forEach((f, k) => faceIndex.set(((f[2] * NY + (f[1] - yMin)) * NX + f[0]) * 6 + f[3], k));
 
-// ---------- 3. 그리기 (WebGL2, 외부 라이브러리 없이) ----------
-// 블록 면 하나를 SUB×SUB 픽셀로 나눈다. 픽셀 색은 큰 그림판 텍스처 한 장에 모아 두고, 칠하면 그 자리만 바꾼다.
-const cv = $('gl'), gl = cv.getContext('webgl2', { antialias: true });
-if (!gl) { $('load').textContent = '이 브라우저에서는 블록 세상을 그릴 수 없어요(WebGL2 필요).'; return; }
-const MAXT = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-let SUB = 8; const TW = Math.min(4096, MAXT);
-while (SUB > 2 && Math.ceil(F.length / (TW / SUB)) * SUB > MAXT) SUB /= 2;
-const PER = TW / SUB, TH = Math.ceil(F.length / PER) * SUB;
-const TEX = new Uint8Array(TW * TH * 4);
-const pos = new Float32Array(F.length * 12), col = new Float32Array(F.length * 12), uv = new Float32Array(F.length * 8), shd = new Float32Array(F.length * 4), idx = new Uint32Array(F.length * 6);
-const CORNERS = [ // 면마다 네 꼭짓점 (블록 기준 0~1). c0→c3 = 그림판 가로, c0→c1 = 세로
-  [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]], [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
-  [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]], [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]],
-  [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]], [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]]];
-const baseRGB = f => { const g = (f[4] === 2 ? .93 : .72) * SHADE[f[3]] * (((f[0] + f[1] + f[2]) & 1) ? 1 : .955); return [g, g, g]; };
-let hidePaint = false;
-F.forEach((f, k) => { const [i, y, j, d] = f, X = S.x0 + i, Z = S.z0 + j, tx = (k % PER) * SUB, ty = Math.floor(k / PER) * SUB;
-  const e = .2, u0 = (tx + e) / TW, u1 = (tx + SUB - e) / TW, v0 = (ty + e) / TH, v1 = (ty + SUB - e) / TH, UV = [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
-  CORNERS[d].forEach((c, n) => { pos.set([X + c[0], y + c[1], Z + c[2]], k * 12 + n * 3); uv.set(UV[n], k * 8 + n * 2); shd[k * 4 + n] = SHADE[f[3]]; });
-  const rgb = baseRGB(f); for (let n = 0; n < 4; n++) col.set(rgb, k * 12 + n * 3);
-  idx.set([k * 4, k * 4 + 1, k * 4 + 2, k * 4, k * 4 + 2, k * 4 + 3], k * 6); });
-const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
-const prog = gl.createProgram();
-gl.attachShader(prog, sh(gl.VERTEX_SHADER, `#version 300 es
-in vec3 p;in vec3 c;in vec2 t;in float s;uniform mat4 m;uniform vec3 eye;out vec3 vc;out vec2 vt;out float vs;out float fd;
-void main(){gl_Position=m*vec4(p,1.);vc=c;vt=t;vs=s;fd=distance(p,eye);}`));
-gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, `#version 300 es
-precision highp float;in vec3 vc;in vec2 vt;in float vs;in float fd;uniform sampler2D tex;uniform float show;uniform vec2 tsz;out vec4 o;
-void main(){vec4 q=texture(tex,vt);vec3 c=(q.a>.5&&show>.5)?q.rgb*(vs*.88+.12):vc;
- vec2 g=fract(vt*tsz);float e=min(min(g.x,1.-g.x),min(g.y,1.-g.y));float near=1.-smoothstep(3.,9.,fd);c*=1.-.12*near*(1.-smoothstep(.0,.06,e)); // 가까이 가면 픽셀 칸 선
- float f=clamp((fd-260.)/500.,0.,.7);o=vec4(mix(c,vec3(.93,.95,.93),f),1.);}`));
-gl.linkProgram(prog); gl.useProgram(prog);
-const buf = (data, attr, n) => { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW); const l = gl.getAttribLocation(prog, attr); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); return b; };
-buf(pos, 'p', 3); buf(col, 'c', 3); buf(uv, 't', 2); buf(shd, 's', 1);
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-const texO = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, texO);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, TW, TH, 0, gl.RGBA, gl.UNSIGNED_BYTE, TEX);
-gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
-const uM = gl.getUniformLocation(prog, 'm'), uE = gl.getUniformLocation(prog, 'eye'), uS = gl.getUniformLocation(prog, 'show');
-gl.uniform1i(gl.getUniformLocation(prog, 'tex'), 0); gl.uniform2f(gl.getUniformLocation(prog, 'tsz'), TW, TH);
-// 그림판의 한 사각형(x, y, w, h 픽셀)을 GPU로 다시 보낸다
-function upRect(x, y, w, h) { const a = new Uint8Array(w * h * 4); for (let r = 0; r < h; r++) a.set(TEX.subarray(((y + r) * TW + x) * 4, ((y + r) * TW + x + w) * 4), r * w * 4); gl.bindTexture(gl.TEXTURE_2D, texO); gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, a); dirty = true; }
-function refreshAll() { gl.bindTexture(gl.TEXTURE_2D, texO); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TW, TH, gl.RGBA, gl.UNSIGNED_BYTE, TEX); dirty = true; }
-
-// 카메라
+// ---------- 5. 카메라·그리기 루프 ----------
+let world = OUT, MVP = null, EYE = null, hidePaint = false;
 const cam = { tx: 40, ty: (yMin + yMax) / 2, tz: 90, yaw: .9, pitch: .62, dist: 230 };
-let dirty = true, MVP = null, EYE = null;
 const persp = (fov, a, n, f) => { const t = 1 / Math.tan(fov / 2); return [t / a, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; };
 const lookAt = (e, t) => { const z = norm(sub(e, t)), x = norm(cross([0, 1, 0], z)), y = cross(z, x); return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, e), -dot(y, e), -dot(z, e), 1]; };
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 const mul = (a, b) => { const o = new Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k]; o[i * 4 + j] = s; } return o; };
+const proj = q => { const m = MVP, x = q[0], y = q[1], z = q[2], cw = m[3] * x + m[7] * y + m[11] * z + m[15]; if (cw <= 0) return null; const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw, cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw; if (Math.abs(cx) > 1.1 || Math.abs(cy) > 1.1) return null; return [(cx + 1) / 2 * cv.clientWidth, (1 - cy) / 2 * cv.clientHeight]; };
 function frame() {
   const w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); dirty = true; }
@@ -187,116 +240,111 @@ function frame() {
     EYE = [cam.tx + cam.dist * Math.sin(cam.yaw) * Math.cos(cam.pitch), cam.ty + cam.dist * Math.sin(cam.pitch), cam.tz + cam.dist * Math.cos(cam.yaw) * Math.cos(cam.pitch)];
     MVP = mul(persp(Math.PI / 4, w / h, Math.max(.03, cam.dist * .015), 1500), lookAt(EYE, [cam.tx, cam.ty, cam.tz]));
     gl.clearColor(.93, .95, .93, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.uniformMatrix4fv(uM, false, MVP); gl.uniform3fv(uE, EYE); gl.uniform1f(uS, hidePaint ? 0 : 1); gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_INT, 0);
-    // 건물 이름표
-    $('labels').innerHTML = LABEL.map(l => { const p = proj([l.x, l.y, l.z]); return p ? `<span style="left:${p[0]}px;top:${p[1]}px">${esc(l.name)}</span>` : ''; }).join('');
+    gl.uniformMatrix4fv(uM, false, MVP); gl.uniform3fv(uE, EYE); gl.uniform1f(uS, hidePaint ? 0 : 1); world.draw();
+    $('labels').innerHTML = world.labels().map(l => { const p = proj([l.x, l.y, l.z]); return p ? `<span class="${l.room ? 'room' : ''}" style="left:${p[0]}px;top:${p[1]}px">${esc(l.text)}</span>` : ''; }).join('');
   }
   requestAnimationFrame(frame);
 }
-const proj = q => { const m = MVP, x = q[0], y = q[1], z = q[2], cw = m[3] * x + m[7] * y + m[11] * z + m[15]; if (cw <= 0) return null; const cx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / cw, cy = (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw; return [(cx + 1) / 2 * cv.clientWidth, (1 - cy) / 2 * cv.clientHeight]; };
-
-// 누른 곳의 블록 면 찾기: 화면 → 광선 → 블록 격자를 한 칸씩 따라가기
-function pickFace(px, py) {
-  const w = cv.clientWidth, h = cv.clientHeight, f = 1 / Math.tan(Math.PI / 8), a = w / h;
-  const nx = (px / w) * 2 - 1, ny = 1 - (py / h) * 2;
+function rayAt(px, py) { const w = cv.clientWidth, h = cv.clientHeight, f = 1 / Math.tan(Math.PI / 8), a = w / h, nx = (px / w) * 2 - 1, ny = 1 - (py / h) * 2;
   const z = norm(sub(EYE, [cam.tx, cam.ty, cam.tz])), x = norm(cross([0, 1, 0], z)), y = cross(z, x);
-  const dir = norm([x[0] * nx * a / f + y[0] * ny / f - z[0], x[1] * nx * a / f + y[1] * ny / f - z[1], x[2] * nx * a / f + y[2] * ny / f - z[2]]);
-  let gx = EYE[0] - S.x0, gy = EYE[1], gz = EYE[2] - S.z0; // 격자 좌표 (y는 그대로 m)
-  let i = Math.floor(gx), Y = Math.floor(gy), j = Math.floor(gz);
-  const st = dir.map(v => v > 0 ? 1 : -1), tD = dir.map(v => Math.abs(1 / (v || 1e-9)));
-  let tM = [((st[0] > 0 ? i + 1 : i) - gx) / (dir[0] || 1e-9), ((st[1] > 0 ? Y + 1 : Y) - gy) / (dir[1] || 1e-9), ((st[2] > 0 ? j + 1 : j) - gz) / (dir[2] || 1e-9)];
-  let last = -1, tHit = 0;
-  for (let n = 0; n < 3000; n++) {
-    if (solid(i, Y, j)) { const d = last === 0 ? (st[0] > 0 ? 1 : 0) : last === 1 ? (st[1] > 0 ? 3 : 2) : (st[2] > 0 ? 5 : 4); const k = faceIndex.get(((j * NY + (Y - yMin)) * NX + i) * 6 + d); if (k == null) return null;
-      const hp = [EYE[0] + dir[0] * tHit, EYE[1] + dir[1] * tHit, EYE[2] + dir[2] * tHit], f = F[k], c = CORNERS[f[3]], o = [S.x0 + f[0] + c[0][0], f[1] + c[0][1], S.z0 + f[2] + c[0][2]];
-      const U = sub(c[3], c[0]), W = sub(c[1], c[0]), r = sub(hp, o), clamp = v => Math.max(0, Math.min(SUB - 1, Math.floor(v * SUB)));
-      return { k, a: clamp(dot(r, U)), b: clamp(dot(r, W)), hp }; }
-    const ax = tM[0] < tM[1] ? (tM[0] < tM[2] ? 0 : 2) : (tM[1] < tM[2] ? 1 : 2);
-    tHit = tM[ax];
-    if (ax === 0) { i += st[0]; tM[0] += tD[0]; } else if (ax === 1) { Y += st[1]; tM[1] += tD[1]; } else { j += st[2]; tM[2] += tD[2]; }
-    last = ax; if (Y < yMin - 2 && st[1] < 0) return null;
-  }
-  return null;
-}
+  return norm([x[0] * nx * a / f + y[0] * ny / f - z[0], x[1] * nx * a / f + y[1] * ny / f - z[1], x[2] * nx * a / f + y[2] * ny / f - z[2]]); }
+const pickAt = (px, py) => MVP && world.pick(EYE, rayAt(px, py));
 
-// 조작: 드래그 돌리기, 오른쪽·두 손가락 이동, 휠·핀치 확대, 짧게 누르면 칠하기
-const P = new Map(); let downAt = null, moved = 0, pinch = null, drawDrag = false;
+// 조작
+const P = new Map(); let moved = 0, pinch = null, drawDrag = false;
 cv.addEventListener('contextmenu', e => e.preventDefault());
-cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY, e.button]); if (P.size === 1) { downAt = [e.clientX, e.clientY]; moved = 0; } else pinch = null; });
+cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); P.set(e.pointerId, [e.clientX, e.clientY, e.button]); if (P.size === 1) moved = 0; else pinch = null; });
 cv.addEventListener('pointermove', e => {
   if (!P.has(e.pointerId)) return; const [lx, ly, btn] = P.get(e.pointerId), dx = e.clientX - lx, dy = e.clientY - ly; P.set(e.pointerId, [e.clientX, e.clientY, btn]); moved += Math.abs(dx) + Math.abs(dy);
   if (P.size === 2) { const [a, b] = [...P.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (pinch) { const r = cv.getBoundingClientRect(); zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, pinch / d); } pinch = d; pan(dx / 2, dy / 2); }
-  else if (drawDrag && btn === 0 && !e.shiftKey) { const r = cv.getBoundingClientRect(), n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 2)); for (let q = 1; q <= n; q++) tap(lx + dx * q / n - r.left, ly + dy * q / n - r.top, true); }
+  else if (drawDrag && play === 'draw' && btn === 0 && !e.shiftKey) { const r = cv.getBoundingClientRect(), n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 2)); for (let q = 1; q <= n; q++) tap(lx + dx * q / n - r.left, ly + dy * q / n - r.top, true); }
   else if (btn === 2 || e.shiftKey) pan(dx, dy);
   else { cam.yaw -= dx * .006; cam.pitch = Math.max(.08, Math.min(1.5, cam.pitch + dy * .005)); }
   dirty = true;
 });
 const pan = (dx, dy) => { const k = cam.dist / 600, s = Math.sin(cam.yaw), c = Math.cos(cam.yaw); cam.tx += (-dx * c - dy * s) * k; cam.tz += (dx * s - dy * c) * k; };
-const up = e => { const had = P.size; P.delete(e.pointerId); if (P.size < 2) pinch = null; if (had === 1 && (moved < 6 || drawDrag) && e.type === 'pointerup') { const r = cv.getBoundingClientRect(); tap(e.clientX - r.left, e.clientY - r.top); } };
+const up = e => { const had = P.size; P.delete(e.pointerId); if (P.size < 2) pinch = null; if (had === 1 && (moved < 6 || (drawDrag && play === 'draw')) && e.type === 'pointerup') { const r = cv.getBoundingClientRect(); tap(e.clientX - r.left, e.clientY - r.top); } };
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 const MIN_D = 1.5, MAX_D = 600;
-// 누른 곳(커서) 쪽으로 확대·축소: 가리키는 점이 화면에서 그대로 있도록 카메라 중심도 같이 옮긴다
-function zoomAt(px, py, f) {
-  const nd = Math.max(MIN_D, Math.min(MAX_D, cam.dist * f)), k = 1 - nd / cam.dist;
-  const h = MVP && pickFace(px, py);
-  if (h && h.hp) { cam.tx += (h.hp[0] - cam.tx) * k; cam.ty += (h.hp[1] - cam.ty) * k; cam.tz += (h.hp[2] - cam.tz) * k; }
-  cam.dist = nd; dirty = true;
-}
+function zoomAt(px, py, f) { const nd = Math.max(MIN_D, Math.min(MAX_D, cam.dist * f)), k = 1 - nd / cam.dist, h = pickAt(px, py);
+  if (h && h.hp) { cam.tx += (h.hp[0] - cam.tx) * k; cam.ty += (h.hp[1] - cam.ty) * k; cam.tz += (h.hp[2] - cam.tz) * k; } cam.dist = nd; dirty = true; }
 cv.addEventListener('wheel', e => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(e.deltaY * .0015)); }, { passive: false });
 $('zin').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, .55); }; $('zout').onclick = () => { const r = cv.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.8); };
-// 키보드: +/- 확대, 방향키 이동
 addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; const r = cv.getBoundingClientRect();
   if (e.key === '+' || e.key === '=') zoomAt(r.width / 2, r.height / 2, .7); else if (e.key === '-') zoomAt(r.width / 2, r.height / 2, 1.4);
   else if (e.key.startsWith('Arrow')) { const m = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }[e.key]; pan(m[0], m[1]); dirty = true; } });
 
-const who = new Map(), FEED = ['<b>니콜스요정</b> 님이 니콜스관 위에 하트를 그렸어요', '<b>다솔길고양이</b> 님이 현장 퀘스트로 물감 300칸을 모았어요'];
+// ---------- 6. 칠하기 · 탐방 ----------
+const FEED = ['<b>니콜스요정</b> 님이 니콜스관 위에 하트를 그렸어요'];
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-const nameAt = k => { const f = F[k]; const x = S.x0 + f[0] + .5, z = S.z0 + f[2] + .5; const b = S.buildings.find(b => b.parts.some(p => inPoly(x, z, p.poly))); return b ? b.name : (f[4] === 1 ? '땅' : '건물'); };
-let brush = 1; const BRUSH = [1, 2, 4, 8].filter(b => b <= SUB);
-const texel = (k, a, b) => [(k % PER) * SUB + a, Math.floor(k / PER) * SUB + b];
+let brush = 1;
+const placeOf = (W, k) => { const f = W.F[k];
+  if (W === IN) { const fl = IN.floors[Math.floor(f[1] / IN.FL)], x = W.ox + (f[0] + .5) * W.cell, z = W.oz + (f[2] + .5) * W.cell; let best = null, bd = 1e9; for (const l of fl.labels || []) { const d = Math.hypot(l.x - x, l.z - z); if (d < bd) { bd = d; best = l; } }
+    return `니콜스관 ${fl.id}` + (best && bd < 6 ? ` · ${/^N\d/.test(best.id) ? best.id : best.name} 근처` : ''); }
+  const x = W.ox + f[0] + .5, z = W.oz + f[2] + .5, b = S.buildings.find(b => b.parts.some(p => inPoly(x, z, p.poly))); return b ? b.name : '땅'; };
 function tap(px, py, dragging) {
   if (!me) { if (!dragging) toast('먼저 시작하기를 눌러 주세요.'); return; }
-  const h = pickFace(px, py); if (!h) return;
-  if (mode === 'weird') { if (dragging) return; mode = 'paint'; toast(`${nameAt(h.k)}에 「이상해 보여요」를 남겼어요. 현장 퀘스트로 올라가요.`); FEED.unshift(`<b>${esc(me.nick)}</b> 님이 ${esc(nameAt(h.k))}에 「이상해 보여요」를 표시했어요`); drawPane(); return; }
-  const n = Math.min(brush, SUB), a0 = Math.floor(h.a / n) * n, b0 = Math.floor(h.b / n) * n, [x0, y0] = texel(h.k, a0, b0), rgb = hex(color);
+  const h = pickAt(px, py); if (!h) return; const W = world;
+  if (play === 'tour') { if (dragging) return; const [tx, ty] = W.texel(h.k, h.a, h.b), by = W.who.get(ty * W.TW + tx); toast(`${placeOf(W, h.k)}${by ? ` · ${by} 님이 칠한 곳` : ' · 아직 아무도 칠하지 않았어요'}`); return; }
+  if (mode === 'weird') { if (dragging) return; mode = 'paint'; toast(`${placeOf(W, h.k)}에 「이상해 보여요」를 남겼어요. 현장 퀘스트로 올라가요.`); FEED.unshift(`<b>${esc(me.nick)}</b> 님이 ${esc(placeOf(W, h.k))}에 「이상해 보여요」를 표시했어요`); drawPane(); return; }
+  const n = Math.min(brush, W.SUB), a0 = Math.floor(h.a / n) * n, b0 = Math.floor(h.b / n) * n, [x0, y0] = W.texel(h.k, a0, b0), rgb = hex(color);
   let used = 0;
-  for (let y = y0; y < y0 + n; y++) for (let x = x0; x < x0 + n; x++) { const o = (y * TW + x) * 4, key = y * TW + x;
-    if (mode === 'erase') { if (who.get(key) === me.nick) { TEX[o + 3] = 0; who.delete(key); used--; } continue; }
-    if (TEX[o + 3] && TEX[o] === rgb[0] && TEX[o + 1] === rgb[1] && TEX[o + 2] === rgb[2]) continue;
-    if (ink - used <= 0) break; TEX.set([rgb[0], rgb[1], rgb[2], 255], o); who.set(key, me.nick); used++; }
-  if (used > 0 && ink <= 0) { toast('물감이 없어요. 「물감 모으기」에서 현장 퀘스트를 풀어 주세요.'); }
-  ink -= used; upRect(x0, y0, n, n); updMe();
+  for (let y = y0; y < y0 + n; y++) for (let x = x0; x < x0 + n; x++) { const o = (y * W.TW + x) * 4, key = y * W.TW + x;
+    if (mode === 'erase') { if (W.who.get(key) === me.nick) { W.TEX[o + 3] = 0; W.who.delete(key); used--; } continue; }
+    if (W.TEX[o + 3] && W.TEX[o] === rgb[0] && W.TEX[o + 1] === rgb[1] && W.TEX[o + 2] === rgb[2]) continue;
+    if (ink - used <= 0) break; W.TEX.set([rgb[0], rgb[1], rgb[2], 255], o); W.who.set(key, me.nick); used++; }
+  if (used > 0 && ink - used <= 0) toast('물감이 없어요. 「물감 모으기」에서 현장 퀘스트를 풀어 주세요.');
+  ink -= used; W.upRect(x0, y0, n, n); updMe();
 }
 
-// 미리 칠해 둔 것 (시안): 하늘에서 보면 니콜스관 위로 큰 하트 + 무지개 띠 (지붕·땅의 윗면에 걸쳐 그림)
-{ const HX = 60, HZ = 80, R = 15, RX = -40, RZ = 60;
-  F.forEach((f, k) => { if (f[3] !== 2) return; const X = S.x0 + f[0], Z = S.z0 + f[2];
+// 미리 칠해 둔 것 (시안)
+{ const HX = 60, HZ = 80, R = 15, RX = -40, RZ = 60, W = OUT, SUB = W.SUB;
+  W.F.forEach((f, k) => { if (f[3] !== 2) return; const X = W.ox + f[0], Z = W.oz + f[2];
     if (Math.abs(X - HX) > R * 1.4 && Math.abs(X - RX) > 30) return;
     for (let b = 0; b < SUB; b++) for (let a = 0; a < SUB; a++) { const x = X + (a + .5) / SUB, z = Z + (b + .5) / SUB;
       const u = (x - HX) / R, v = -(z - HZ) / R * 1.1 + .15, hv = Math.pow(u * u + v * v - 1, 3) - u * u * v * v * v;
       let c = null; if (hv <= 0) c = [214, 54, 90]; else if (Math.abs(x - RX) < 24 && z > RZ && z < RZ + 6) c = hex(PAL[Math.floor((x - RX + 24) / 8) % 6]);
-      if (!c) continue; const [tx, ty] = texel(k, a, b), o = (ty * TW + tx) * 4; TEX.set([c[0], c[1], c[2], 255], o); who.set(ty * TW + tx, hv <= 0 ? '니콜스요정' : '무지개'); } });
-  refreshAll(); }
+      if (!c) continue; const [tx, ty] = W.texel(k, a, b), o = (ty * W.TW + tx) * 4; W.TEX.set([c[0], c[1], c[2], 255], o); W.who.set(ty * W.TW + tx, hv <= 0 ? '니콜스요정' : '무지개'); } });
+  W.refresh(); }
 
-$('load').remove(); requestAnimationFrame(frame);
 
-// ---------- 4. 왼쪽 패널 ----------
+// 세상 바꾸기 · 층 고르기
+function setWorld(w) {
+  if (w === 'in' && !IN) { toast('실내 도면을 불러오지 못했어요.'); return; }
+  world = w === 'in' ? IN : OUT; document.querySelectorAll('#wbar button').forEach(b => b.classList.toggle('on', b.dataset.w === w)); $('fbar').hidden = w !== 'in';
+  if (w === 'in') { const sl = IN.floors[IN.cur].slab || IN.floors[0].slab, cx = sl.reduce((a, p) => a + p[0], 0) / sl.length, cz = sl.reduce((a, p) => a + p[1], 0) / sl.length; Object.assign(cam, { tx: cx, tz: cz, ty: IN.floors[IN.cur].y, yaw: .5, pitch: 1.05, dist: 110 }); }
+  else Object.assign(cam, { tx: 40, ty: (yMin + yMax) / 2, tz: 90, yaw: .9, pitch: .62, dist: 230 });
+  dirty = true; drawPane();
+}
+function drawFloorBar() { if (!IN) return; $('fbar').innerHTML = IN.floors.map((f, k) => `<button data-f="${k}" class="${k === IN.cur ? 'on' : ''}">${f.id === 'RF' ? '옥상' : f.id}</button>`).reverse().join('');
+  $('fbar').querySelectorAll('button').forEach(b => b.onclick = () => { IN.setFloor(+b.dataset.f); cam.ty = IN.floors[IN.cur].y; dirty = true; }); }
+drawFloorBar();
+document.querySelectorAll('#wbar button').forEach(b => b.onclick = () => setWorld(b.dataset.w));
+
+$('load').remove(); requestAnimationFrame(frame); globalThis.__cam = cam; globalThis.__pick = (x, y) => pickAt(x, y); globalThis.__w = () => world;
+
+// ---------- 7. 왼쪽 패널 ----------
 let QUESTS = []; try { QUESTS = (await (await fetch('../quest/data/quests.json')).json()).quests.filter(q => !['찾기', '비교'].includes(q.type)).slice(0, 8); } catch (e) {}
 const solved = new Set();
+const totalPx = () => OUT.F.length * OUT.SUB * OUT.SUB + (IN ? IN.F.length * IN.SUB * IN.SUB : 0), paintedPx = () => OUT.who.size + (IN ? IN.who.size : 0);
 function drawPane() {
   if (tab === 'draw') {
-    $('pane').innerHTML = `<div class="how">블록 면 하나(1m)가 <b>${SUB}×${SUB} 픽셀</b>로 나뉘어 있어요(한 픽셀 ${Math.round(100 / SUB * 10) / 10}cm). 가까이 확대해서 칠해요. 드래그는 돌리기, 오른쪽 드래그·Shift는 옮기기예요.</div>
+    const tour = play === 'tour';
+    $('pane').innerHTML = `<div class="row"><button data-p="draw" class="${!tour ? 'on' : ''}">🎨 그리기</button><button data-p="tour" class="${tour ? 'on' : ''}">🚶 탐방</button></div>` + (tour ? `
+      <div class="how"><b>탐방</b>: 학교를 돌아다니며 누가 어디에 무엇을 남겼는지 봐요. 아무 곳이나 누르면 <b>그곳이 어디인지, 누가 칠했는지</b> 알려 줘요. 니콜스관 안은 위 「🚪 니콜스관 안」에서 층을 골라 들어가요.</div>` : `
+      <div class="how">${world === IN ? '니콜스관 안: 0.5m 블록 한 면이 4×4 픽셀' : '바깥: 1m 블록 한 면이 8×8 픽셀'}(한 픽셀 12.5cm). 가까이 확대해서 칠해요. 드래그는 돌리기, 오른쪽 드래그·Shift는 옮기기예요.</div>
       <div class="pal">${PAL.map(c => `<button data-c="${c}" class="${c === color ? 'on' : ''}" style="background:${c}" aria-label="색 ${c}"></button>`).join('')}</div>
-      <div class="row">${BRUSH.map(b => `<button data-b="${b}" class="${b === brush ? 'on' : ''}">붓 ${b}×${b}</button>`).join('')}</div>
+      <div class="row">${[1, 2, 4, 8].filter(b => b <= world.SUB).map(b => `<button data-b="${b}" class="${b === brush ? 'on' : ''}">붓 ${b}×${b}</button>`).join('')}</div>
       <div class="row"><button id="dd" class="${drawDrag ? 'on' : ''}">${drawDrag ? '✏️ 드래그로 칠하는 중 (끄기)' : '✏️ 드래그로 칠하기'}</button></div>
-      <div class="row"><button data-m="paint" class="${mode === 'paint' ? 'on' : ''}">칠하기</button><button data-m="erase" class="${mode === 'erase' ? 'on' : ''}">내 픽셀 지우기</button><button data-m="weird" class="${mode === 'weird' ? 'on' : ''}">⚠ 이상해 보여요</button></div>
+      <div class="row"><button data-m="paint" class="${mode === 'paint' ? 'on' : ''}">칠하기</button><button data-m="erase" class="${mode === 'erase' ? 'on' : ''}">내 픽셀 지우기</button><button data-m="weird" class="${mode === 'weird' ? 'on' : ''}">⚠ 이상해 보여요</button></div>`) + `
       <div class="row"><button id="bw">${hidePaint ? '색 다시 보기' : '흑백으로 보기'}</button></div>
-      <div class="feed">칠할 수 있는 픽셀 ${(F.length * SUB * SUB).toLocaleString()}개 · 칠해진 픽셀 ${who.size.toLocaleString()}개<br>${FEED.slice(0, 5).map(f => '· ' + f).join('<br>')}</div>`;
+      <div class="feed">칠할 수 있는 픽셀 ${totalPx().toLocaleString()}개 · 칠해진 픽셀 ${paintedPx().toLocaleString()}개<br>${FEED.slice(0, 5).map(f => '· ' + f).join('<br>')}</div>`;
+    $('pane').querySelectorAll('[data-p]').forEach(b => b.onclick = () => { play = b.dataset.p; drawPane(); $('hint').textContent = play === 'tour' ? '탐방 중 · 누르면 그곳이 어디인지, 누가 칠했는지 알려 줘요' : '드래그로 돌리고, 휠·두 손가락으로 확대해요 · 누르면 그 픽셀이 칠해져요'; });
     $('pane').querySelectorAll('.pal button').forEach(b => b.onclick = () => { color = b.dataset.c; mode = 'paint'; drawPane(); });
-    $('pane').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; drawPane(); if (mode === 'weird') toast('실제 학교와 달라 보이는 블록을 눌러 주세요.'); });
-    $('bw').onclick = () => { hidePaint = !hidePaint; dirty = true; drawPane(); };
+    $('pane').querySelectorAll('[data-m]').forEach(b => b.onclick = () => { mode = b.dataset.m; drawPane(); if (mode === 'weird') toast('실제 학교와 달라 보이는 곳을 눌러 주세요.'); });
     $('pane').querySelectorAll('[data-b]').forEach(b => b.onclick = () => { brush = +b.dataset.b; drawPane(); });
-    $('dd').onclick = () => { drawDrag = !drawDrag; drawPane(); if (drawDrag) toast('이제 드래그하면 칠해져요. 돌리려면 오른쪽 드래그나 두 손가락을 써요.'); };
+    const dd = $('dd'); if (dd) dd.onclick = () => { drawDrag = !drawDrag; drawPane(); if (drawDrag) toast('이제 드래그하면 칠해져요. 돌리려면 오른쪽 드래그나 두 손가락을 써요.'); };
+    $('bw').onclick = () => { hidePaint = !hidePaint; dirty = true; drawPane(); };
   } else {
     $('pane').innerHTML = `<div class="how"><b>물감은 학교에서만 모을 수 있어요.</b> 그 자리에 가서 답하면 물감 300픽셀. 실제로는 다른 사람 답과 같아야 확정되고, 확정된 답은 3D 지도를 고치는 데 쓰여요. (시안이라 지금은 바로 들어와요)</div>` +
       QUESTS.map((q, i) => `<div class="q${solved.has(i) ? ' done' : ''}"><b>${esc(q.title)}</b><p>${esc(q.q)}</p>${solved.has(i) ? '<span class="ok">✓ 물감 300픽셀 받았어요</span>' : `<div class="opts">${q.options.slice(0, 5).map(o => `<button data-i="${i}">${esc(o)}</button>`).join('')}</div>`}</div>`).join('');
@@ -305,7 +353,7 @@ function drawPane() {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { tab = b.dataset.t; drawPane(); });
-function updMe() { $('me').innerHTML = '<b></b><span id="ink"></span>'; $('me').querySelector('b').textContent = me.nick; $('ink').textContent = `🎨 물감 ${ink.toLocaleString()}픽셀`; if (tab === 'draw') { const f = $('pane').querySelector('.feed'); if (f) f.firstChild.textContent = `칠할 수 있는 픽셀 ${(F.length * SUB * SUB).toLocaleString()}개 · 칠해진 픽셀 ${who.size.toLocaleString()}개`; } }
+function updMe() { $('me').innerHTML = '<b></b><span id="ink"></span>'; $('me').querySelector('b').textContent = me.nick; $('ink').textContent = `🎨 물감 ${ink.toLocaleString()}픽셀`; if (tab === 'draw') { const f = $('pane').querySelector('.feed'); if (f) f.firstChild.textContent = `칠할 수 있는 픽셀 ${totalPx().toLocaleString()}개 · 칠해진 픽셀 ${paintedPx().toLocaleString()}개`; } }
 $('startGo').onclick = () => { const nick = $('nick').value.trim(); if (!nick) { toast('닉네임을 정해 주세요.'); return; } me = { nick }; ink = 3000; $('start').remove(); updMe(); drawPane(); };
 drawPane();
 })().catch(e => { console.error(e); const l = document.getElementById('load'); if (l) l.textContent = '블록 세상을 만들지 못했어요: ' + e.message; });
