@@ -77,7 +77,7 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 
 <div id="ed">
   <div id="edtop"><div><h2 id="edtitle"></h2><small id="edsub"></small></div><span class="sp"></span>
-    <button id="undo">↶ 되돌리기</button><button id="redo">↷ 다시</button><button id="edclose">닫기</button><button class="apply" id="apply">벽에 입히기</button></div>
+    <label id="frontLbl" style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="front" checked> 기둥·띠보다 앞에 걸기(현수막)</label><button id="undo">↶ 되돌리기</button><button id="redo">↷ 다시</button><button id="edclose">닫기</button><button class="apply" id="apply">벽에 입히기</button></div>
   <div id="edbody">
     <div id="tools">
       <button data-tool="brush" class="on">🖌️<br>붓</button>
@@ -97,7 +97,7 @@ header{padding:14px 18px 10px;border-bottom:1px solid var(--line)}
   <h2>학교 벽에 그리는 캔버스</h2>
   <p>cukmap 3D 학교의 건물 벽을 골라 <b>도화지처럼 펼쳐서</b> 그려요. 다 그리면 그 벽에 그대로 입혀져요.</p>
   <ul>
-    <li>벽은 크게 꺾이는 모서리마다 한 장씩 자동으로 나뉘어요. 창문·차양은 그림 앞에 그대로 남아요.</li>
+    <li>벽은 크게 꺾이는 모서리마다 한 장씩 자동으로 나뉘어요. 그림은 기둥·띠 앞에 현수막처럼 걸거나, 벽에 바로 칠한 것처럼 입힐 수 있어요.</li>
     <li>태블릿 펜에 맞췄어요. 세게 누르면 굵게, 살살 누르면 가늘게 그려져요.</li>
     <li><b>물감은 학교에서 모아요.</b> 「물감 모으기」의 현장 질문에 답하면 칠할 수 있는 넓이(㎡)가 늘어요.</li>
   </ul>
@@ -131,7 +131,7 @@ const nameOf = s => { const same = SHEETS.filter(x => x.building === s.building)
   const gr = g.createLinearGradient(0, 0, c.width, 0); ['#ff9ec7', '#f2c230', '#e8552e', '#7a55c7', '#3b7dd8'].forEach((x, i) => gr.addColorStop(i / 4, x));
   g.globalAlpha = .88; g.fillStyle = gr; g.fillRect(0, y5 + (y2 - y5) * .15, c.width, (y2 - y5) * .7); g.globalAlpha = 1;
   g.fillStyle = '#ffffff'; g.font = `900 ${Math.round((y2 - y5) * .42)}px system-ui, sans-serif`; g.textBaseline = 'middle'; g.fillText('CATHOLIC UNIV · SONGSIM  ♥  2026', c.width * .06, (y5 + y2) / 2);
-  const url = c.toDataURL(); art.set(s.id, { url, by: '니콜스요정', px: 0 }); await map.sheetPaint(s.id, url); }
+  const url = c.toDataURL(); art.set(s.id, { url, by: '니콜스요정', front: true }); await map.sheetPaint(s.id, url, { front: true }); }
 
 // 벽을 누르면 그 도화지로
 map.on('click', e => { if (!e.sheet) { if (e.building) toast('벽을 눌러 주세요. 이번 시안은 니콜스관 일대 5개 건물의 외벽이에요.'); return; } openEditor(byId(e.sheet), e.su, e.sv); });
@@ -157,7 +157,7 @@ async function openEditor(s, su, sv) {
   const W = Math.min(4096, Math.round(s.length * PPM)), k = W / s.length, Hh = Math.round(s.height * k);
   cur = { s, k }; cv.width = gd.width = W; cv.height = gd.height = Hh; paper.style.width = W + 'px'; paper.style.height = Hh + 'px';
   ctx.clearRect(0, 0, W, Hh); undo = []; redo = [];
-  const a = art.get(s.id); if (a) { const im = new Image(); await new Promise(r => { im.onload = r; im.src = a.url; }); ctx.drawImage(im, 0, 0, W, Hh); }
+  const a = art.get(s.id); $('front').checked = a ? a.front !== false : true; if (a) { const im = new Image(); await new Promise(r => { im.onload = r; im.src = a.url; }); ctx.drawImage(im, 0, 0, W, Hh); }
   basePx = opaque();
   // 안내선: 층 선 + 꺾인 곳
   gx.clearRect(0, 0, W, Hh); gx.setLineDash([10, 8]); gx.lineWidth = 2; gx.strokeStyle = '#2b5b4877'; gx.fillStyle = '#2b5b48aa'; gx.font = '600 16px system-ui';
@@ -179,7 +179,7 @@ const closeEd = () => { $('ed').classList.remove('show'); $('map').style.display
 $('edclose').onclick = closeEd;
 $('apply').onclick = async () => {
   const used = costTxt(); if (used > ink + 1e-6) { toast(`물감이 ${(used - ink).toFixed(1)}㎡ 모자라요. 「물감 모으기」에서 현장 질문에 답해 주세요.`); return; }
-  const url = cv.toDataURL('image/png'); await map.sheetPaint(cur.s.id, url); ink -= used; art.set(cur.s.id, { url, by: me.nick });
+  const url = cv.toDataURL('image/png'), front = $('front').checked; await map.sheetPaint(cur.s.id, url, { front }); ink -= used; art.set(cur.s.id, { url, by: me.nick, front });
   FEED.unshift(`<b>${esc(me.nick)}</b> 님이 ${esc(nameOf(cur.s))}에 그림을 입혔어요`); closeEd(); updMe(); drawPane(); toast('벽에 입혔어요! 3D로 돌려 보세요.');
 };
 // 그리기 입력: 펜이 한 번이라도 보이면 펜만 그리고 손가락은 확대·이동
