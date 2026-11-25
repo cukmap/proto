@@ -1,21 +1,23 @@
-// canvas.cukmap.com — 벽 도화지 (서버 연결판)
-// 그림·물감·퀴즈·현장 질문은 cukmap 서버(/api/canvas, cukmap/map 저장소의 worker/canvas.js)에 저장된다.
-// 그림 한 번 입히기 = 새로 칠한 부분만 잘라 한 장(patch)으로 올림. 벽 모습 = 그 벽의 patch를 오래된 것부터 겹친 것.
+// canvas.cukmap.com — 하얀 학교를 다 같이 칠하는 실시간 벽 그림판
+// - 벽마다 그림판이 하나. 모두가 같은 판에 칠하고, 펜을 떼면 바로 서버에 올라가 몇 초 안에 다른 사람 화면에도 나타난다.
+// - 서버: cukmap/map 저장소 worker/canvas.js (/api/canvas). 펜을 뗄 때마다 칠한 부분만 잘라 한 장(patch)으로 올리고,
+//   벽 모습 = 그 벽의 장들을 오래된 것부터 겹친 것(지우기 장은 그 모양만큼 원래 벽이 보이게).
 (async () => {
 const $ = id => document.getElementById(id);
 const toast = (t, ms = 2800) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms); };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const PAL = ['#e8552e', '#f2c230', '#2e9b5f', '#3b7dd8', '#7a55c7', '#c2456b', '#8fd0ff', '#ff9ec7', '#8a5a2b', '#ffffff', '#9aa39d', '#26392f'];
-const PPM = 20; // 도화지 1m = 20px (서버와 같아야 함)
+const PAL = ['#e8552e', '#f2c230', '#2e9b5f', '#3b7dd8', '#7a55c7', '#c2456b', '#8fd0ff', '#ff9ec7', '#8a5a2b', '#ffffff', '#9aa39d', '#26392f', '#b8452c', '#d9cbb0', '#7c8a92', '#4a5b3f'];
+const PPM = 20;              // 도화지 1m = 20px (서버와 같아야 함)
+const PAPER = '#f3f1ec';     // 지우개 미리보기 색(원래 벽)
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? '방금' : m < 60 ? m + '분 전' : m < 1440 ? Math.round(m / 60) + '시간 전' : Math.round(m / 1440) + '일 전'; };
+const m2 = v => v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1);
 
 // ---------- 서버 ----------
 const Q = new URLSearchParams(location.search);
 const API = Q.get('api') || 'https://cukmap.com/api/canvas';
 const rand = () => [...crypto.getRandomValues(new Uint8Array(18))].map(b => b.toString(16).padStart(2, '0')).join('');
-// 이 기기를 구분하는 값(가입 없음). 저장이 막힌 브라우저면 이 창을 닫을 때까지만 유지
 let DEV; try { DEV = localStorage.getItem('cukcanvas.id'); if (!DEV) { DEV = rand(); localStorage.setItem('cukcanvas.id', DEV); } } catch (_) { DEV = rand(); }
-let me = null, meAt = 0, RULES = { INK_MAX: 30, INK_PER_H: 6 };
+let me = null, meAt = 0, RULES = { INK_MAX: 30, INK_PER_H: 6, QUIZ_INK: 5, ANSWER_PT: 3 };
 async function api(path, o = {}) {
   let r; try { r = await fetch(API + path, { method: o.method || 'GET', headers: { 'x-canvas-id': DEV, ...(o.body ? { 'content-type': 'application/json' } : {}) }, body: o.body ? JSON.stringify(o.body) : undefined }); }
   catch (e) { throw new Error('서버에 닿지 못했어요. 인터넷 연결을 확인해 주세요.'); }
@@ -24,126 +26,180 @@ async function api(path, o = {}) {
   if (!r.ok) throw Object.assign(new Error(j.error || '서버 오류가 났어요.'), { status: r.status });
   return j;
 }
-function setMe(m) {
-  me = m; meAt = Date.now();
-  for (const n of m.notices || []) if (n.kind === 'answer') toast(`현장 질문 답이 다른 사람들 답과 맞아 확정됐어요! +${n.points}점`, 4000);
-  updMe();
-}
-// 물감은 서버에서 시간마다 차오른다. 화면에서도 같은 셈으로 보여 줌
+function setMe(m) { me = m; meAt = Date.now(); for (const n of m.notices || []) if (n.kind === 'answer') toast(`현장 질문 답이 다른 사람들 답과 맞아 확정됐어요! +${n.points}점`, 4000); updMe(); }
 const inkNow = () => !me ? 0 : me.ink >= RULES.INK_MAX ? me.ink : Math.min(RULES.INK_MAX, me.ink + (Date.now() - meAt) / 3600000 * RULES.INK_PER_H);
 function updMe() {
   if (!me || !me.name) return;
   $('me').innerHTML = '<b></b><span id="ink"></span>'; $('me').querySelector('b').textContent = me.name;
-  const ink = inkNow(), full = ink >= RULES.INK_MAX;
-  $('ink').textContent = `🎨 ${ink.toFixed(1)}㎡ · ⭐ ${me.points}점`;
-  $('ink').title = full ? '물감이 가득 찼어요. 퀴즈를 풀면 더 쌓을 수 있어요.' : `한 시간에 ${RULES.INK_PER_H}㎡씩 ${RULES.INK_MAX}㎡까지 차요`;
+  $('ink').textContent = `🎨 ${inkNow().toFixed(1)}㎡ · ⭐ ${me.points}점`;
+  $('ink').title = `물감은 한 시간에 ${RULES.INK_PER_H}㎡씩 ${RULES.INK_MAX}㎡까지 차요. 퀴즈를 풀면 더 쌓을 수 있어요.`;
+  if (cur) costTxt();
 }
-setInterval(updMe, 20000);
+setInterval(updMe, 15000);
 
-// ---------- 지도와 벽 도화지 ----------
-const BLD = ['니콜스관', '학생미래인재관', '다솔관', '밤비노관', '비르투스관'];
+// ---------- 지도: 하얀 학교 + 모든 건물의 벽 도화지 ----------
 const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
-const SHEETS = await map.sheets({ buildings: BLD });
+let plainOn = true; await map.plain(1);
+$('plainBtn').onclick = async () => { plainOn = !plainOn; await map.plain(plainOn ? 1 : 0); $('plainBtn').classList.toggle('on', !plainOn); $('plainBtn').textContent = plainOn ? '🎨 원래 색 보기' : '🏫 하얀 학교로'; };
+let opT = null; $('op').oninput = () => { clearTimeout(opT); opT = setTimeout(() => map.sheetOpacity($('op').value / 100), 30); };
+const BUILD = [], SHEETS = [];
+for (const b of await map.buildings()) { try { const ss = (await map.sheets({ buildings: [b.name] })).filter(s => s.length >= 2 && s.height >= 2); if (ss.length) { BUILD.push(b.name); SHEETS.push(...ss); } } catch (_) {} }
 const byId = id => SHEETS.find(s => s.id === id);
 const nameOf = s => { const same = SHEETS.filter(x => x.building === s.building), k = same.indexOf(s) + 1; return `${s.building} 벽 ${k}`; };
 const sizeOf = s => { const W = Math.min(4096, Math.round(s.length * PPM)); return { W, H: Math.round(s.height * W / s.length), k: W / s.length }; };
+const TOTAL = SHEETS.reduce((t, s) => t + s.length * s.height, 0);
 const newCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
 const loadImg = url => new Promise((ok, no) => { const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => ok(im); im.onerror = () => no(new Error('그림을 불러오지 못했어요.')); im.src = url; });
 
-const art = new Map();      // 벽 id → { c: 겹친 그림, list: [patch], front, url }
-let PATCHES = [];           // 지금 보이는 모든 patch
-const known = new Set(), hiddenSet = new Set();
-let lastId = 0, FEED = [], MINE = new Set();
+// ---------- 같이 쓰는 벽 ----------
+const art = new Map();                 // 벽 id → { c: 겹친 그림, maxId, area }
+const PATCHES = new Map();             // 벽 id → [patch] (id 순)
+const IMG = new Map();                 // patch id → 그림(Image 또는 canvas)
+const hiddenSet = new Set(), MYSENT = []; // MYSENT: 되돌리기용, 이번에 내가 올린 장(최근 것이 끝)
+let lastId = 0, PRES = new Map(), MINE = new Set();
+const imgOf = async p => { if (!IMG.has(p.id)) { try { IMG.set(p.id, await loadImg(`${API}/patch/${p.id}.png`)); } catch (_) { IMG.set(p.id, null); } } return IMG.get(p.id); };
+function drawPatch(g, p) { const im = IMG.get(p.id); if (!im) return; g.globalCompositeOperation = p.mode === 'erase' ? 'destination-out' : 'source-over'; g.drawImage(im, p.x, p.y); g.globalCompositeOperation = 'source-over'; }
+function measure(A) { // 칠해진 넓이(㎡): 4점마다 하나씩 본다
+  const d = A.c.getContext('2d').getImageData(0, 0, A.c.width, A.c.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 127) n++; A.area = n * 4 / (A.k * A.k);
+  const t = newCanvas(120, Math.max(8, Math.round(120 * A.c.height / A.c.width))); t.getContext('2d').drawImage(A.c, 0, 0, t.width, t.height); A.thumb = t.toDataURL();
+}
 async function paintSheet(id, add) {
   const s = byId(id); if (!s) return;
-  let A = art.get(id);
-  if (!A || !add) { const { W, H } = sizeOf(s); A = { c: newCanvas(W, H), list: [], front: true }; art.set(id, A); add = PATCHES.filter(p => p.sheet === id); }
-  const ims = await Promise.all(add.map(p => loadImg(`${API}/patch/${p.id}.png`).catch(() => null)));
-  const g = A.c.getContext('2d'); add.forEach((p, i) => { if (ims[i]) g.drawImage(ims[i], p.x, p.y); A.list.push(p); A.front = !!p.front; });
-  A.url = A.c.toDataURL(); await map.sheetPaint(id, A.url, { front: A.front });
+  let A = art.get(id); const list = PATCHES.get(id) || [];
+  const full = !A || !add || add.some(p => p.id < A.maxId);
+  const todo = full ? list : add;
+  await Promise.all(todo.map(imgOf));
+  if (full) { const { W, H, k } = sizeOf(s); A = { c: newCanvas(W, H), maxId: 0, area: 0, k }; art.set(id, A); }
+  const g = A.c.getContext('2d'); for (const p of todo) { drawPatch(g, p); A.maxId = Math.max(A.maxId, p.id); }
+  measure(A); await map.sheetPaint(id, A.c.toDataURL(), { front: true });
   if (cur && cur.s.id === id) drawBase();
 }
+function addPatch(p) { if (!PATCHES.has(p.sheet)) PATCHES.set(p.sheet, []); const l = PATCHES.get(p.sheet); l.push(p); l.sort((a, b) => a.id - b.id); }
+let busyRefresh = false;
 async function refresh() {
-  const j = await api('/state?since=' + lastId);
-  RULES = j.rules; FEED = j.feed; MINE = new Set(j.mine);
-  if (!j.me) updMe();
-  const redo = new Set();
-  for (const id of j.hidden) if (!hiddenSet.has(id)) { hiddenSet.add(id); const p = PATCHES.find(p => p.id === id); if (p) redo.add(p.sheet); }
-  PATCHES = PATCHES.filter(p => !hiddenSet.has(p.id));
-  const add = new Map();
-  for (const p of j.patches) { lastId = Math.max(lastId, p.id); if (known.has(p.id) || hiddenSet.has(p.id) || !byId(p.sheet)) continue; known.add(p.id); PATCHES.push(p); if (!add.has(p.sheet)) add.set(p.sheet, []); add.get(p.sheet).push(p); }
-  for (const id of redo) await paintSheet(id, null);
-  for (const [id, list] of add) if (!redo.has(id)) await paintSheet(id, art.has(id) ? list : null);
-  return j;
+  if (busyRefresh) return; busyRefresh = true;
+  try {
+    const j = await api('/state?since=' + lastId);
+    RULES = j.rules; MINE = new Set(j.mine); PRES = new Map(j.presence.map(r => [r.sheet, r.n]));
+    const redo = new Set(), add = new Map();
+    for (const id of j.hidden) if (!hiddenSet.has(id)) { hiddenSet.add(id); for (const [sh, l] of PATCHES) { const i = l.findIndex(p => p.id === id); if (i >= 0) { l.splice(i, 1); redo.add(sh); } } }
+    for (const p of j.patches) { lastId = Math.max(lastId, p.id); if (hiddenSet.has(p.id) || !byId(p.sheet) || (PATCHES.get(p.sheet) || []).some(q => q.id === p.id)) continue; addPatch(p); if (!add.has(p.sheet)) add.set(p.sheet, []); add.get(p.sheet).push(p); }
+    for (const id of redo) await paintSheet(id, null);
+    for (const [id, l] of add) if (!redo.has(id)) await paintSheet(id, l);
+    if (redo.size || add.size) updCover();
+    updLive(); return j;
+  } finally { busyRefresh = false; }
 }
+function updCover() {
+  let a = 0; for (const A of art.values()) a += A.area || 0;
+  $('cover').innerHTML = `칠해진 벽 <b>${m2(a)}㎡</b> · 학교 벽의 <b>${(a / TOTAL * 100).toFixed(a / TOTAL < .01 ? 2 : 1)}%</b>`;
+}
+// 그 자리를 마지막으로 칠한(지운) 사람
+const probe = newCanvas(1, 1), pg = probe.getContext('2d', { willReadFrequently: true });
+function whoAt(id, px, py) {
+  const l = PATCHES.get(id) || [];
+  for (let i = l.length - 1; i >= 0; i--) { const p = l[i], im = IMG.get(p.id); if (!im || px < p.x || py < p.y || px >= p.x + p.w || py >= p.y + p.h) continue;
+    pg.clearRect(0, 0, 1, 1); pg.drawImage(im, -(px - p.x), -(py - p.y)); if (pg.getImageData(0, 0, 1, 1).data[3] > 40) return p; }
+  return null;
+}
+const whoTxt = p => !p ? '아직 아무도 칠하지 않은 곳이에요.' : `${MINE.has(p.id) ? '내가' : esc(p.name) + ' 님이'} ${p.mode === 'erase' ? '지웠어요' : '칠했어요'} · ${ago(p.at)}`;
 
-// 벽을 누르면 그 도화지로
-map.on('click', e => { if (!e.sheet) { if (e.building) toast('벽을 눌러 주세요. 이번 시안은 니콜스관 일대 5개 건물의 외벽이에요.'); return; } openEditor(byId(e.sheet), e.su, e.sv); });
-let blank = false;
-$('blankBtn').onclick = async () => { blank = !blank; await map.showSheets(true, { blank }); $('blankBtn').classList.toggle('on', blank); };
-let opT = null; $('op').oninput = () => { clearTimeout(opT); opT = setTimeout(() => map.sheetOpacity($('op').value / 100), 30); };
+if (Q.has('debug')) globalThis.__cv = { whoAt, PATCHES, IMG, art, get cur() { return cur; } };
+// 3D에서 벽을 누르면: 누가 칠했는지 + 그리기 버튼
+map.on('click', e => {
+  const pop = $('pop');
+  if (!e.sheet) { pop.classList.remove('on'); if (e.building) toast('벽을 눌러 주세요.'); return; }
+  const s = byId(e.sheet); if (!s) return; const { H, k } = sizeOf(s), p = whoAt(s.id, Math.floor(e.su * k), Math.floor(H - e.sv * k)), n = PRES.get(s.id) || 0;
+  pop.innerHTML = `<h3>${esc(nameOf(s))}</h3><div class="m">${s.length.toFixed(0)}m × ${s.height.toFixed(0)}m${n ? ` · <span class="drawing">✏️ 지금 ${n}명이 그리는 중</span>` : ''}<br>누른 곳: ${whoTxt(p)}</div><div class="b"><button class="go2">✏️ 이 벽에 그리기</button><button class="x">닫기</button></div>`;
+  pop.classList.add('on'); pop.querySelector('.go2').onclick = () => { pop.classList.remove('on'); openEditor(s, e.su, e.sv); }; pop.querySelector('.x').onclick = () => pop.classList.remove('on');
+});
 
 // ---------- 편집기 ----------
-// 아래 판(bs) = 지금 벽 모습(다른 사람 그림 포함, 못 고침), 위 판(cv) = 이번에 내가 칠하는 것
-const bs = $('bs'), bx = bs.getContext('2d'), cv = $('cv'), gd = $('gd'), ctx = cv.getContext('2d', { willReadFrequently: true }), gx = gd.getContext('2d'), paper = $('paper'), wrap = $('paperwrap');
+// 판 세 장: bs = 지금 벽(모두의 그림), fl = 올리는 중인 것, cv = 아직 안 올린 내 획(펜을 떼고 잠깐 뒤 올라감)
+const bs = $('bs'), bx = bs.getContext('2d'), fl = $('fl'), fx = fl.getContext('2d'), cv = $('cv'), gd = $('gd'), ctx = cv.getContext('2d', { willReadFrequently: true }), gx = gd.getContext('2d'), paper = $('paper'), wrap = $('paperwrap');
 let cur = null, tool = 'brush', color = PAL[0], size = 14, undo = [], redo = [], view = { s: 1, x: 0, y: 0 }, penSeen = false, showGuide = true;
+let pendMode = null, sendT = null, sending = false, presT = null;
 $('cols').innerHTML = PAL.map(c => `<button data-c="${c}" style="background:${c}" class="${c === color ? 'on' : ''}"></button>`).join('');
-$('cols').onclick = e => { const b = e.target.closest('button'); if (!b) return; color = b.dataset.c; $('pick').value = color; if (tool === 'erase') tool = 'brush'; markTools(); };
+$('cols').onclick = e => { const b = e.target.closest('button'); if (!b) return; color = b.dataset.c; $('pick').value = color; if (tool !== 'brush' && tool !== 'fill') tool = 'brush'; markTools(); };
 $('pick').oninput = () => { color = $('pick').value; markTools(); };
 $('size').oninput = () => size = +$('size').value;
-document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; markTools(); if (tool === 'erase') toast('지우개는 이번에 내가 칠한 것만 지워요. 남의 그림은 위에 덧그려 주세요.'); });
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { tool = b.dataset.tool; markTools(); if (tool === 'erase') toast('지우개는 칠한 것을 지워 원래 벽이 보이게 해요. 지운 넓이만큼 물감이 들어요.'); if (tool === 'who') toast('누가 칠했는지 궁금한 곳을 눌러 보세요.'); });
 const markTools = () => { document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool)); $('cols').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.c === color)); };
 $('guideBtn').onclick = () => { showGuide = !showGuide; $('guideBtn').classList.toggle('on', showGuide); gd.style.display = showGuide ? '' : 'none'; };
-const opaque = () => { const d = ctx.getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 127) n++; return n * 4; }; // 4점마다 하나 세서 빠르게
-const area = px => px / (cur.k * cur.k);
-function costTxt() { const used = area(opaque()), ink = inkNow(); $('cost').innerHTML = `이번 그림 <b>${used.toFixed(1)}㎡</b> · 남은 물감 <b${used > ink ? ' style="color:#c0392b"' : ''}>${ink.toFixed(1)}㎡</b>`; return used; }
+const scan = c => { const g = c.getContext('2d'), W = c.width, H = c.height, d = g.getImageData(0, 0, W, H).data; let x0 = W, y0 = H, x1 = -1, y1 = -1, n = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = d[(y * W + x) * 4 + 3]; if (!a) continue; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (a > 127) n++; }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1, n }; };
+const pendArea = () => { const d = ctx.getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 127) n++; return n * 4 / (cur.k * cur.k); };
+function costTxt() { const used = pendArea(), ink = inkNow() - used; $('cost').innerHTML = `남은 물감 <b${ink < 0 ? ' style="color:#c0392b"' : ''}>${Math.max(0, ink).toFixed(1)}㎡</b>${used > .05 ? ` <small>(올리는 중 ${used.toFixed(1)}㎡)</small>` : ''}`; }
 function drawBase() { const A = art.get(cur.s.id); bx.clearRect(0, 0, bs.width, bs.height); if (A) bx.drawImage(A.c, 0, 0, bs.width, bs.height); }
+function updLive() {
+  if (!cur) return; const n = Math.max(0, (PRES.get(cur.s.id) || 0) - 1);
+  $('live').innerHTML = sending ? '⏫ 올리는 중…' : n ? `<span class="drawing">✏️ 다른 ${n}명이 이 벽에 그리는 중</span>` : '● 실시간 · 펜을 떼면 모두에게 보여요';
+}
 
 async function openEditor(s, su, sv) {
   if (!me || !me.name) { toast('먼저 시작하기를 눌러 주세요.'); return; }
   const { W, H: Hh, k } = sizeOf(s);
-  cur = { s, k }; for (const c of [bs, cv, gd]) { c.width = W; c.height = Hh; } paper.style.width = W + 'px'; paper.style.height = Hh + 'px';
-  ctx.clearRect(0, 0, W, Hh); undo = []; redo = []; drawBase();
-  const A = art.get(s.id); $('front').checked = A ? A.front !== false : true;
+  cur = { s, k }; for (const c of [bs, fl, cv, gd]) { c.width = W; c.height = Hh; } paper.style.width = W + 'px'; paper.style.height = Hh + 'px';
+  ctx.clearRect(0, 0, W, Hh); undo = []; redo = []; pendMode = null; drawBase();
   gx.clearRect(0, 0, W, Hh); gx.setLineDash([10, 8]); gx.lineWidth = 2; gx.strokeStyle = '#2b5b4877'; gx.fillStyle = '#2b5b48aa'; gx.font = '600 16px system-ui';
   for (const f of s.floors) { const y = Hh - f.v * k; gx.beginPath(); gx.moveTo(0, y); gx.lineTo(W, y); gx.stroke(); gx.fillText(f.floor, 6, y - 6); }
   gx.strokeStyle = '#9b3a1677'; for (const u of s.folds) { const x = u * k; gx.beginPath(); gx.moveTo(x, 0); gx.lineTo(x, Hh); gx.stroke(); }
-  $('edtitle').textContent = nameOf(s); $('edsub').textContent = ` · ${s.length.toFixed(1)}m × ${s.height.toFixed(1)}m · 칠하지 않은 곳은 원래 벽이 보여요`;
-  $('ed').classList.add('show'); $('map').style.display = 'none'; // 그리는 동안 3D 지도는 멈춰서 태블릿이 그림판에 힘을 다 쓰게
+  $('edtitle').textContent = nameOf(s); $('edsub').textContent = ` · ${s.length.toFixed(1)}m × ${s.height.toFixed(1)}m`;
+  $('ed').classList.add('show'); $('map').style.display = 'none';
   const r = wrap.getBoundingClientRect(), fit = Math.min(r.width / W, r.height / Hh) * .95;
   view.s = su != null ? Math.max(fit, Math.min(2, r.height / Hh * .9)) : fit;
   const cx = su != null ? su * k : W / 2, cy = sv != null ? Hh - sv * k : Hh / 2;
-  view.x = r.width / 2 - cx * view.s; view.y = r.height / 2 - cy * view.s; applyView(); costTxt();
+  view.x = r.width / 2 - cx * view.s; view.y = r.height / 2 - cy * view.s; applyView(); costTxt(); updLive();
+  const ping = () => api('/presence', { method: 'POST', body: { sheet: s.id } }).catch(() => {}); ping(); clearInterval(presT); presT = setInterval(ping, 10000);
 }
 const applyView = () => { paper.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.s})`; };
 const snap = () => { undo.push(ctx.getImageData(0, 0, cv.width, cv.height)); if (undo.length > 20) undo.shift(); redo = []; };
-$('undo').onclick = () => { if (!undo.length) return; redo.push(ctx.getImageData(0, 0, cv.width, cv.height)); ctx.putImageData(undo.pop(), 0, 0); costTxt(); };
-$('redo').onclick = () => { if (!redo.length) return; undo.push(ctx.getImageData(0, 0, cv.width, cv.height)); ctx.putImageData(redo.pop(), 0, 0); costTxt(); };
-const closeEd = () => { $('ed').classList.remove('show'); $('map').style.display = ''; cur = null; };
-$('edclose').onclick = () => { if (undo.length && !confirm('칠한 것을 벽에 입히지 않고 닫을까요?')) return; closeEd(); };
-$('apply').onclick = async () => {
-  const W = cv.width, H = cv.height, d = ctx.getImageData(0, 0, W, H).data;
-  let x0 = W, y0 = H, x1 = -1, y1 = -1, n = 0;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = d[(y * W + x) * 4 + 3]; if (!a) continue; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (a > 127) n++; }
-  if (x1 < 0) { toast('아직 칠한 곳이 없어요.'); return; }
-  const w = x1 - x0 + 1, h = y1 - y0 + 1, used = Math.min(area(n), w * h / (PPM * PPM));
-  if (used > inkNow() + 1e-6) { toast(`물감이 ${(used - inkNow()).toFixed(1)}㎡ 모자라요. 조금 기다리거나 「물감 모으기」에서 퀴즈를 풀어 주세요.`, 4000); return; }
-  const crop = newCanvas(w, h); crop.getContext('2d').drawImage(cv, -x0, -y0);
-  const btn = $('apply'); btn.disabled = true; btn.textContent = '올리는 중…';
+
+// 올리기: 펜을 떼고 0.6초 동안 더 안 그리면, 아직 안 올린 획을 한 장으로 올린다
+const schedule = () => { clearTimeout(sendT); sendT = setTimeout(flush, 600); };
+async function flush() {
+  clearTimeout(sendT); if (!cur || sending) { if (sending) schedule(); return; }
+  const b = scan(cv); if (!b) { pendMode = null; return; }
+  const s = cur.s, k = cur.k, mode = pendMode || 'paint';
+  const area = Math.min(b.n / (k * k), b.w * b.h / (PPM * PPM));
+  if (area > inkNow() + 1e-6) { toast(`물감이 ${(area - inkNow()).toFixed(1)}㎡ 모자라 아직 못 올렸어요. 되돌리기로 줄이거나 「물감 모으기」에서 퀴즈를 풀어 주세요.`, 4500); return; }
+  const crop = newCanvas(b.w, b.h), cg = crop.getContext('2d'); cg.drawImage(cv, -b.x, -b.y);
+  if (mode === 'erase') { cg.globalCompositeOperation = 'source-in'; cg.fillStyle = '#000'; cg.fillRect(0, 0, b.w, b.h); } // 지우기 장은 모양만 있으면 됨
+  fx.clearRect(0, 0, fl.width, fl.height); fx.drawImage(cv, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); undo = []; redo = []; pendMode = null;
+  sending = true; updLive();
   try {
-    const j = await api('/patches', { method: 'POST', body: { sheet: cur.s.id, x: x0, y: y0, w, h, area: used, front: $('front').checked, png: crop.toDataURL('image/png'), label: nameOf(cur.s) } });
-    const p = j.patch; known.add(p.id); PATCHES.push(p); MINE.add(p.id);
-    const s = cur.s; let A = art.get(s.id); if (!A) { const { W: w2, H: h2 } = sizeOf(s); A = { c: newCanvas(w2, h2), list: [], front: true }; art.set(s.id, A); }
-    A.c.getContext('2d').drawImage(crop, x0, y0); A.list.push(p); A.front = !!p.front; A.url = A.c.toDataURL();
-    await map.sheetPaint(s.id, A.url, { front: A.front });
-    FEED.unshift({ at: Date.now(), text: `${me.name} 님이 ${nameOf(s)}에 그림을 입혔어요` });
-    closeEd(); drawPane(); toast('벽에 입혔어요! 이제 모두에게 보여요.');
-  } catch (e) { toast(e.message, 4000); }
-  finally { btn.disabled = false; btn.textContent = '벽에 입히기'; }
+    const j = await api('/patches', { method: 'POST', body: { sheet: s.id, x: b.x, y: b.y, w: b.w, h: b.h, area, front: true, mode, png: crop.toDataURL('image/png') } });
+    const p = j.patch; IMG.set(p.id, crop); MINE.add(p.id); MYSENT.push(p); addPatch(p);
+    const A = art.get(s.id); if (A && p.id > A.maxId) { drawPatch(A.c.getContext('2d'), p); A.maxId = p.id; measure(A); await map.sheetPaint(s.id, A.c.toDataURL(), { front: true }); } else await paintSheet(s.id, null);
+    updCover(); if (cur && cur.s.id === s.id) drawBase();
+  } catch (e) {
+    toast(e.message, 4000);
+    if (cur && cur.s.id === s.id) { ctx.globalCompositeOperation = 'destination-over'; ctx.drawImage(fl, 0, 0); ctx.globalCompositeOperation = 'source-over'; pendMode = mode; }
+  } finally { fx.clearRect(0, 0, fl.width, fl.height); sending = false; updLive(); if (cur) costTxt(); }
+}
+// 되돌리기: 안 올린 획이 있으면 그것부터, 없으면 내가 올린 마지막 장을 서버에서 지움(물감은 돌려받음)
+$('undo').onclick = async () => {
+  if (undo.length) { clearTimeout(sendT); redo.push(ctx.getImageData(0, 0, cv.width, cv.height)); ctx.putImageData(undo.pop(), 0, 0); costTxt(); if (scan(cv)) schedule(); else pendMode = null; return; }
+  const p = MYSENT.filter(q => !hiddenSet.has(q.id)).pop(); if (!p) { toast('되돌릴 것이 없어요.'); return; }
+  try { await api(`/patches/${p.id}`, { method: 'DELETE' }); hiddenSet.add(p.id); const l = PATCHES.get(p.sheet) || [], i = l.findIndex(q => q.id === p.id); if (i >= 0) l.splice(i, 1); await paintSheet(p.sheet, null); updCover(); toast('방금 칠한 것을 되돌렸어요. 물감도 돌려받았어요.'); } catch (e) { toast(e.message); }
 };
+$('redo').onclick = () => { if (!redo.length) return; undo.push(ctx.getImageData(0, 0, cv.width, cv.height)); ctx.putImageData(redo.pop(), 0, 0); costTxt(); schedule(); };
+$('edclose').onclick = async () => {
+  await flush(); for (let i = 0; i < 40 && sending; i++) await new Promise(r => setTimeout(r, 100));
+  if (scan(cv)) { toast('물감이 모자라 올리지 못한 획은 지워졌어요.', 4000); }
+  clearInterval(presT); api('/presence', { method: 'POST', body: { sheet: null } }).catch(() => {});
+  $('ed').classList.remove('show'); $('map').style.display = ''; cur = null; drawPane();
+};
+
 const toPaper = (cx, cy) => { const r = wrap.getBoundingClientRect(); return [(cx - r.left - view.x) / view.s, (cy - r.top - view.y) / view.s]; };
 const P = new Map(); let drawing = null, pinch = null;
 wrap.addEventListener('contextmenu', e => e.preventDefault());
+function begin(mode) { // 칠하기와 지우기는 따로 올린다
+  if (pendMode && pendMode !== mode && scan(cv)) flush();
+  if (inkNow() - (cur ? pendArea() : 0) <= 0.05) { toast('물감이 다 떨어졌어요. 조금 기다리거나 「물감 모으기」에서 퀴즈를 풀어 주세요.', 3500); return false; }
+  pendMode = mode; clearTimeout(sendT); return true;
+}
 wrap.addEventListener('pointerdown', e => {
   wrap.setPointerCapture(e.pointerId); if (e.pointerType === 'pen') penSeen = true;
   const draws = e.pointerType === 'pen' || (e.pointerType === 'mouse' && e.button === 0) || (e.pointerType === 'touch' && !penSeen && P.size === 0);
@@ -151,7 +207,9 @@ wrap.addEventListener('pointerdown', e => {
   if (P.size > 1) { if (drawing) { ctx.putImageData(undo.pop(), 0, 0); drawing = null; } pinch = null; return; }
   if (!draws) return;
   const [x, y] = toPaper(e.clientX, e.clientY);
-  if (tool === 'fill') { snap(); flood(Math.floor(x), Math.floor(y)); costTxt(); return; }
+  if (tool === 'who') { toast(whoTxt(whoAt(cur.s.id, Math.floor(x), Math.floor(y))).replace(/&[a-z]+;/g, ''), 3500); return; }
+  if (!begin(tool === 'erase' ? 'erase' : 'paint')) return;
+  if (tool === 'fill') { snap(); flood(Math.floor(x), Math.floor(y)); costTxt(); schedule(); return; }
   snap(); drawing = { x, y }; dot(x, y, e);
 });
 wrap.addEventListener('pointermove', e => {
@@ -160,18 +218,18 @@ wrap.addEventListener('pointermove', e => {
   if (drawing) { const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; for (const q of evs) { const [x, y] = toPaper(q.clientX, q.clientY); line(drawing.x, drawing.y, x, y, q); drawing = { x, y }; } return; }
   if (!p.draws || e.buttons === 2) { view.x += dx; view.y += dy; applyView(); }
 });
-const end = e => { P.delete(e.pointerId); if (P.size < 2) pinch = null; if (drawing) { drawing = null; costTxt(); } };
+const end = e => { P.delete(e.pointerId); if (P.size < 2) pinch = null; if (drawing) { drawing = null; costTxt(); schedule(); } };
 wrap.addEventListener('pointerup', end); wrap.addEventListener('pointercancel', end);
 wrap.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * .0015), 0, 0); }, { passive: false });
 function zoomAt(cx, cy, f, dx, dy) { const r = wrap.getBoundingClientRect(), x = cx - r.left, y = cy - r.top, ns = Math.max(.05, Math.min(8, view.s * f)); view.x = x - (x - view.x) * ns / view.s + dx; view.y = y - (y - view.y) * ns / view.s + dy; view.s = ns; applyView(); }
 const width = e => size * (e.pointerType === 'pen' ? .25 + .95 * (e.pressure || .5) : 1);
-function style(e) { ctx.globalCompositeOperation = tool === 'erase' ? 'destination-out' : 'source-over'; ctx.strokeStyle = ctx.fillStyle = color; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = width(e); }
+function style(e) { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = ctx.fillStyle = tool === 'erase' ? PAPER : color; ctx.lineCap = ctx.lineJoin = 'round'; ctx.lineWidth = width(e); }
 function dot(x, y, e) { style(e); ctx.beginPath(); ctx.arc(x, y, width(e) / 2, 0, Math.PI * 2); ctx.fill(); }
 function line(x0, y0, x1, y1, e) { style(e); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
-// 채우기: 보이는 모습(아래 판 + 위 판)에서 비슷한 색으로 이어진 곳을 찾아, 위 판(내 것)에 칠한다
+// 채우기: 보이는 모습(모두의 그림 + 내 획)에서 비슷한 색으로 이어진 곳을 찾아 내 판에 칠한다
 function flood(x, y) {
   const W = cv.width, H = cv.height; if (x < 0 || y < 0 || x >= W || y >= H) return;
-  const comp = newCanvas(W, H), cg = comp.getContext('2d'); cg.drawImage(bs, 0, 0); cg.drawImage(cv, 0, 0);
+  const comp = newCanvas(W, H), cg = comp.getContext('2d'); cg.drawImage(bs, 0, 0); cg.drawImage(fl, 0, 0); cg.drawImage(cv, 0, 0);
   const d = cg.getImageData(0, 0, W, H).data, img = ctx.getImageData(0, 0, W, H), o = img.data;
   const i0 = (y * W + x) * 4, t = [d[i0], d[i0 + 1], d[i0 + 2], d[i0 + 3]];
   const c = [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16), 255];
@@ -187,49 +245,39 @@ function flood(x, y) {
 addEventListener('keydown', e => { if (!$('ed').classList.contains('show')) return; if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); } if (e.key === 'Escape') $('edclose').click(); });
 
 // ---------- 오른쪽 패널 ----------
-let tab = 'walls', openFlag = null, RANK = null, QUIZ = [], MYANS = new Map();
+let tab = 'walls', QUIZ = [], MYANS = new Map(), openB = new Set();
 let QUESTS = []; try { QUESTS = (await (await fetch('../quest/data/quests.json')).json()).quests.filter(q => !['찾기', '비교'].includes(q.type)).slice(0, 8); } catch (e) {}
 async function loadEarn() { try { const [a, b] = await Promise.all([api('/quizzes'), api('/answers')]); QUIZ = a.quizzes; MYANS = new Map(b.answers.map(r => [r.qkey, r])); } catch (e) { toast(e.message); } }
 function wallsPane() {
-  const rk = RANK && RANK.painters.length ? `<div class="rank"><b>많이 그린 사람</b><br>${RANK.painters.slice(0, 5).map((r, i) => `${i + 1}. ${esc(r.name)} · ${r.n}㎡`).join('<br>')}</div>` : '';
-  return `<div class="how">3D 지도에서 <b>벽을 누르거나</b> 아래 목록에서 골라요. 남의 그림 위에 덧그릴 수 있어요. 「흰 도화지로 보기」를 켜면 그림 없는 벽이 하얗게 보여요.</div>` +
-    BLD.map(b => `<div style="font-size:12px;color:#6b7a70;margin:10px 2px 2px">${b}</div>` + SHEETS.filter(s => s.building === b && s.length >= 6).map(s => { const A = art.get(s.id), list = A ? A.list : [];
-      const names = [...new Set(list.slice().reverse().map(p => p.name))];
-      return `<button class="sheet" data-id="${s.id}"><span class="th" style="${A && list.length ? `background-image:url(${A.url})` : ''}"></span><span style="flex:1">${esc(nameOf(s))}<br><small>${s.length.toFixed(0)}m × ${s.height.toFixed(0)}m${names.length ? ' · ' + esc(names.slice(0, 3).join(', ')) + (names.length > 3 ? ` 외 ${names.length - 3}명` : '') : ''}</small></span>${list.length ? `<span class="flag" data-fl="${s.id}" title="이 벽의 그림 신고">🚩</span>` : ''}</button>` +
-        (openFlag === s.id ? `<div class="plist">${list.slice().reverse().map(p => `${esc(p.name)} · ${ago(p.at)} ${MINE.has(p.id) ? '(내 그림)' : `<button class="flag" data-pid="${p.id}">부적절해요</button>`}`).join('<br>')}<br><small>신고가 ${3}번 모이면 그 한 장만 숨겨지고, 밑에 있던 그림이 다시 보여요.</small></div>` : ''); }).join('')).join('') +
-    `<div class="feed">${FEED.slice(0, 6).map(f => `· ${esc(f.text)} <small>${ago(f.at)}</small>`).join('<br>')}</div>` + rk;
+  const total = [...PRES.values()].reduce((a, b) => a + b, 0);
+  return `<div class="how">3D 지도에서 <b>벽을 누르거나</b> 아래에서 골라요. 한 벽을 모두가 같이 써요. ${total ? `<br><span class="drawing">✏️ 지금 ${total}명이 그리는 중</span>` : ''}</div>` +
+    BUILD.map(bn => { const ss = SHEETS.filter(s => s.building === bn && s.length >= 6); if (!ss.length) return '';
+      const area = ss.reduce((t, s) => t + ((art.get(s.id) || {}).area || 0), 0), pres = ss.reduce((t, s) => t + (PRES.get(s.id) || 0), 0);
+      return `<details class="bld" data-b="${esc(bn)}"${openB.has(bn) ? ' open' : ''}><summary>${esc(bn)}${pres ? ` <span class="drawing">✏️${pres}</span>` : ''}<small>${area > .05 ? m2(area) + '㎡ 칠함' : '하얀 벽'}</small></summary>` +
+        ss.map(s => { const A = art.get(s.id), n = PRES.get(s.id) || 0;
+          return `<button class="sheet" data-id="${s.id}"><span class="th" style="${A && A.area > .05 ? `background-image:url(${A.thumb})` : ''}"></span><span style="flex:1">${esc(nameOf(s))}<br><small>${s.length.toFixed(0)}m × ${s.height.toFixed(0)}m${A && A.area > .05 ? ' · ' + m2(A.area) + '㎡ 칠함' : ''}${n ? ` · <span class="drawing">✏️ ${n}명</span>` : ''}</small></span></button>`; }).join('') + '</details>'; }).join('');
 }
 function earnPane() {
   const r = RULES;
   const quiz = QUIZ.map(q => `<div class="q${q.done ? ' done' : ''}"><b>${esc(q.q)}</b>${q.done
-    ? `<div>${q.ok ? `<span class="ok">✓ 정답! 물감 ${r.QUIZ_INK}㎡ · 1점</span>` : `<span class="bad">정답은 「${esc(q.answer)}」</span>`}</div><div class="why">${esc(q.why)}</div>`
+    ? `<div>${q.ok ? `<span class="ok">✓ 정답! 물감 ${r.QUIZ_INK}㎡ · 1점</span>` : `<span class="bad">정답: ${esc(q.answer)}</span>`}</div><div class="why">${esc(q.why)}</div>`
     : `<div class="opts" style="margin-top:6px">${q.options.map(o => `<button data-qz="${q.id}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div>`}</div>`).join('');
   const quest = QUESTS.map(q => { const a = MYANS.get(q.id);
     const st = !a ? '' : a.confirmed == null ? `<span class="pend">⏳ 내 답 「${esc(a.value)}」 · 다른 사람 답과 맞으면 ${r.ANSWER_PT}점이 들어와요</span>` : a.confirmed === a.value ? `<span class="ok">✓ 확정된 답과 같아요! ${r.ANSWER_PT}점</span>` : `<span class="bad">확정된 답: ${esc(a.confirmed)}</span>`;
     const canAns = !a || a.confirmed == null;
     return `<div class="q${a && a.confirmed != null ? ' done' : ''}"><b>${esc(q.title)}</b><p>${esc(q.q)}</p>${st ? `<div>${st}</div>` : ''}${canAns ? `<div class="opts" style="margin-top:6px">${q.options.slice(0, 8).map(o => `<button data-qk="${q.id}" data-v="${esc(o)}" ${a && a.value === o ? 'style="border-color:#244f3d;font-weight:800"' : ''}>${esc(o)}</button>`).join('')}</div>` : ''}</div>`; }).join('');
-  return `<div class="how"><b>🧩 학교 퀴즈</b>는 정답이 있어서 맞히면 <b>바로</b> 물감 ${r.QUIZ_INK}㎡와 1점. 한 번만 풀 수 있어요.<br><b>📍 현장 질문</b>은 아직 정답을 몰라요. 그 자리에 가서 보고 답해 주세요. <b>${3}명 이상 같은 답</b>이 모이면 확정되고, 같은 답을 낸 사람 모두 <b>${r.ANSWER_PT}점</b>을 받아요. 확정된 답은 3D 지도를 고치는 데 쓰여요.<br>점수는 소품 놓기·날씨 바꾸기에 써요(다음 단계).</div>` +
+  return `<div class="how">물감은 <b>한 시간에 ${r.INK_PER_H}㎡씩 ${r.INK_MAX}㎡까지</b> 저절로 차요. 더 칠하고 싶으면:<br><b>🧩 학교 퀴즈</b>는 정답이 있어서 맞히면 <b>바로</b> 물감 ${r.QUIZ_INK}㎡와 1점. 한 번만 풀 수 있어요.<br><b>📍 현장 질문</b>은 아직 정답을 몰라요. 그 자리에 가서 보고 답해 주세요. <b>3명 이상 같은 답</b>이 모이면 확정되고, 같은 답을 낸 사람 모두 <b>${r.ANSWER_PT}점</b>. 확정된 답은 3D 지도를 고치는 데 쓰여요.<br>점수는 소품 놓기·날씨 바꾸기에 써요(곧 열려요).</div>` +
     `<div class="sec">🧩 학교 퀴즈 (바로 보상)</div>${quiz || '<div class="how">불러오는 중…</div>'}<div class="sec">📍 현장 질문 (나중 보상)</div>${quest}`;
 }
 function drawPane() {
-  $('pane').innerHTML = tab === 'walls' ? wallsPane() : earnPane();
+  const sc = $('pane').scrollTop; $('pane').innerHTML = tab === 'walls' ? wallsPane() : earnPane(); $('pane').scrollTop = sc;
+  $('pane').querySelectorAll('details.bld').forEach(d => d.ontoggle = () => { d.open ? openB.add(d.dataset.b) : openB.delete(d.dataset.b); });
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
 }
 $('pane').addEventListener('click', async e => {
-  const t = e.target.closest('[data-fl],[data-pid],[data-qz],[data-qk],.sheet'); if (!t) return;
-  if (t.dataset.fl) { e.stopPropagation(); openFlag = openFlag === t.dataset.fl ? null : t.dataset.fl; drawPane(); return; }
-  if (t.dataset.pid) {
-    try { const j = await api('/flag', { method: 'POST', body: { kind: 'patch', id: +t.dataset.pid } }); toast(j.hidden ? '신고가 모여 그 그림을 숨겼어요.' : j.counted ? `신고했어요. (${j.flag}/3)` : '이미 신고한 그림이에요.'); if (j.hidden) await refresh(); drawPane(); } catch (er) { toast(er.message); }
-    return;
-  }
-  if (t.dataset.qz) {
-    try { const j = await api('/quiz', { method: 'POST', body: { id: t.dataset.qz, choice: t.dataset.v } }); toast(j.ok ? `정답! 물감 +${j.reward.ink}㎡, +${j.reward.points}점` : `아쉬워요. 정답: ${j.answer}`, 3500); await loadEarn(); drawPane(); } catch (er) { toast(er.message); }
-    return;
-  }
-  if (t.dataset.qk) {
-    try { const j = await api('/answer', { method: 'POST', body: { qkey: t.dataset.qk, value: t.dataset.v } }); toast(j.status === 'confirmed' ? '확정됐어요! 같은 답을 낸 사람 모두 점수를 받아요.' : j.status === 'different' ? '이미 확정된 답과 달라요. 다시 한번 봐 주세요.' : `답을 받았어요. 다른 사람 답과 맞으면 점수가 들어와요.`, 3500); await loadEarn(); drawPane(); } catch (er) { toast(er.message); }
-    return;
-  }
+  const t = e.target.closest('[data-qz],[data-qk],.sheet'); if (!t) return;
+  if (t.dataset.qz) { try { const j = await api('/quiz', { method: 'POST', body: { id: t.dataset.qz, choice: t.dataset.v } }); toast(j.ok ? `정답! 물감 +${j.reward.ink}㎡, +${j.reward.points}점` : `아쉬워요. 정답: ${j.answer}`, 3500); await loadEarn(); drawPane(); } catch (er) { toast(er.message); } return; }
+  if (t.dataset.qk) { try { const j = await api('/answer', { method: 'POST', body: { qkey: t.dataset.qk, value: t.dataset.v } }); toast(j.status === 'confirmed' ? '확정됐어요! 같은 답을 낸 사람 모두 점수를 받아요.' : j.status === 'different' ? '이미 확정된 답과 달라요. 다시 한번 봐 주세요.' : '답을 받았어요. 다른 사람 답과 맞으면 점수가 들어와요.', 3500); await loadEarn(); drawPane(); } catch (er) { toast(er.message); } return; }
   if (t.classList.contains('sheet')) openEditor(byId(t.dataset.id));
 });
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.t; drawPane(); if (tab === 'earn') { await loadEarn(); drawPane(); } });
@@ -240,10 +288,9 @@ $('startGo').onclick = async () => {
   try { await api('/me', { method: 'POST', body: { name } }); $('start').remove(); drawPane(); toast(`물감 ${RULES.INK_MAX}㎡로 시작해요. 벽을 눌러 보세요!`); } catch (e) { toast(e.message); }
 };
 try { await refresh(); } catch (e) { toast(e.message, 5000); }
+updCover();
 if (me && me.name) $('start').remove();
 drawPane();
-const loadRank = async () => { try { RANK = await api('/ranking'); } catch (_) {} };
-await loadRank(); drawPane();
-// 다른 사람이 그린 것이 보이게 15초마다 확인(창을 안 볼 땐 쉼)
-setInterval(async () => { if (document.hidden) return; try { const n = PATCHES.length; await refresh(); if (Math.random() < .25) await loadRank(); if (PATCHES.length !== n || tab === 'walls') drawPane(); } catch (_) {} }, 15000);
+// 실시간: 그리는 동안 2초, 둘러볼 땐 5초마다 새 획을 받는다(창을 안 볼 땐 쉼)
+let tick = 0; setInterval(async () => { tick++; if (document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); if (!cur && tab === 'walls' && !$('pane').matches(':hover')) drawPane(); } catch (_) {} }, 1000);
 })().catch(e => { console.error(e); const p = document.getElementById('pane'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; });
