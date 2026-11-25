@@ -15,6 +15,8 @@ const m2 = v => v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1);
 // ---------- 서버 ----------
 const Q = new URLSearchParams(location.search);
 const API = Q.get('api') || 'https://cukmap.com/api/canvas';
+// 기록 보기: ?at=2026-12-24T23:59 처럼 주면 그 순간의 모습을 그리기 없이 보여 준다
+const AT = Q.get('at') ? (isFinite(+Q.get('at')) ? +Q.get('at') : Date.parse(Q.get('at'))) : 0;
 const rand = () => [...crypto.getRandomValues(new Uint8Array(18))].map(b => b.toString(16).padStart(2, '0')).join('');
 let DEV; try { DEV = localStorage.getItem('cukcanvas.id'); if (!DEV) { DEV = rand(); localStorage.setItem('cukcanvas.id', DEV); } } catch (_) { DEV = rand(); }
 let me = null, meAt = 0, RULES = { INK_MAX: 30, INK_PER_H: 6, QUIZ_INK: 5, ANSWER_PT: 3 };
@@ -40,6 +42,7 @@ setInterval(updMe, 15000);
 // ---------- 지도: 하얀 학교 + 모든 건물의 벽 도화지 ----------
 const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
 let plainOn = true; await map.plain(1);
+$('tlBtn').onclick = timelapse;
 $('plainBtn').onclick = async () => { plainOn = !plainOn; await map.plain(plainOn ? 1 : 0); $('plainBtn').classList.toggle('on', !plainOn); $('plainBtn').textContent = plainOn ? '🎨 원래 색 보기' : '🏫 하얀 학교로'; };
 let opT = null; $('op').oninput = () => { clearTimeout(opT); opT = setTimeout(() => map.sheetOpacity($('op').value / 100), 30); };
 const BUILD = [], SHEETS = [];
@@ -79,7 +82,7 @@ let busyRefresh = false;
 async function refresh() {
   if (busyRefresh) return; busyRefresh = true;
   try {
-    const j = await api('/state?since=' + lastId);
+    const j = await api('/state?since=' + lastId + (AT ? '&until=' + AT : ''));
     RULES = j.rules; MINE = new Set(j.mine); PRES = new Map(j.presence.map(r => [r.sheet, r.n]));
     const redo = new Set(), add = new Map();
     for (const id of j.hidden) if (!hiddenSet.has(id)) { hiddenSet.add(id); for (const [sh, l] of PATCHES) { const i = l.findIndex(p => p.id === id); if (i >= 0) { l.splice(i, 1); redo.add(sh); } } }
@@ -114,6 +117,29 @@ map.on('click', e => {
   pop.classList.add('on'); pop.querySelector('.go2').onclick = () => { pop.classList.remove('on'); openEditor(s, e.su, e.sv); }; pop.querySelector('.x').onclick = () => pop.classList.remove('on');
 });
 
+// ---------- 타임랩스: 하얀 학교가 칠해져 온 과정을 3D로 다시 보기 ----------
+let replaying = false;
+const when = t => { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${d.getHours() < 12 ? '오전' : '오후'} ${(d.getHours() % 12) || 12}:${String(d.getMinutes()).padStart(2, '0')}`; };
+async function timelapse() {
+  if (replaying || cur) return;
+  const all = [...PATCHES.values()].flat().sort((a, b) => a.id - b.id);
+  if (!all.length) { toast('아직 칠해진 곳이 없어요.'); return; }
+  replaying = true; $('tlBtn').textContent = '⏱ 다시 보는 중…'; $('pop').classList.remove('on');
+  await Promise.all(all.map(imgOf));
+  const C = new Map(); // 벽 id → 다시 그리는 판
+  for (const id of new Set(all.map(p => p.sheet))) { const { W, H } = sizeOf(byId(id)); C.set(id, newCanvas(W, H)); await map.sheetPaint(id, C.get(id).toDataURL(), { front: true }); }
+  const steps = Math.min(90, all.length), per = Math.ceil(all.length / steps);
+  for (let i = 0; i < all.length; i += per) {
+    const chunk = all.slice(i, i + per), ch = new Set();
+    for (const p of chunk) { drawPatch(C.get(p.sheet).getContext('2d'), p); ch.add(p.sheet); }
+    for (const id of ch) await map.sheetPaint(id, C.get(id).toDataURL(), { front: true });
+    $('cover').innerHTML = `⏱ <b>${when(chunk[chunk.length - 1].at)}</b> · ${Math.min(all.length, i + per)} / ${all.length}번째 획`;
+    await new Promise(r => setTimeout(r, Math.max(30, 12000 / steps)));
+  }
+  for (const id of C.keys()) { const A = art.get(id); if (A) await map.sheetPaint(id, A.c.toDataURL(), { front: true }); }
+  replaying = false; $('tlBtn').textContent = '⏱ 타임랩스'; updCover();
+}
+
 // ---------- 편집기 ----------
 // 판 세 장: bs = 지금 벽(모두의 그림), fl = 올리는 중인 것, cv = 아직 안 올린 내 획(펜을 떼고 잠깐 뒤 올라감)
 const bs = $('bs'), bx = bs.getContext('2d'), fl = $('fl'), fx = fl.getContext('2d'), cv = $('cv'), gd = $('gd'), ctx = cv.getContext('2d', { willReadFrequently: true }), gx = gd.getContext('2d'), paper = $('paper'), wrap = $('paperwrap');
@@ -138,6 +164,8 @@ function updLive() {
 }
 
 async function openEditor(s, su, sv) {
+  if (AT) { toast('기록 보기에서는 그릴 수 없어요. 지금 학교로 가서 그려 주세요.'); return; }
+  if (replaying) return;
   if (!me || !me.name) { toast('먼저 시작하기를 눌러 주세요.'); return; }
   const { W, H: Hh, k } = sizeOf(s);
   cur = { s, k }; for (const c of [bs, fl, cv, gd]) { c.width = W; c.height = Hh; } paper.style.width = W + 'px'; paper.style.height = Hh + 'px';
@@ -289,8 +317,9 @@ $('startGo').onclick = async () => {
 };
 try { await refresh(); } catch (e) { toast(e.message, 5000); }
 updCover();
-if (me && me.name) $('start').remove();
+if ((me && me.name) || AT) $('start').remove();
+if (AT) { $('hint').textContent = `📸 ${when(AT)}의 모습 (기록 보기)`; }
 drawPane();
 // 실시간: 그리는 동안 2초, 둘러볼 땐 5초마다 새 획을 받는다(창을 안 볼 땐 쉼)
-let tick = 0; setInterval(async () => { tick++; if (document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); if (!cur && tab === 'walls' && !$('pane').matches(':hover')) drawPane(); } catch (_) {} }, 1000);
+let tick = 0; setInterval(async () => { tick++; if (AT || replaying || document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); if (!cur && tab === 'walls' && !$('pane').matches(':hover')) drawPane(); } catch (_) {} }, 1000);
 })().catch(e => { console.error(e); const p = document.getElementById('pane'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; });
