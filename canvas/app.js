@@ -82,7 +82,8 @@ let busyRefresh = false;
 async function refresh() {
   if (busyRefresh) return; busyRefresh = true;
   try {
-    const j = await api('/state?since=' + lastId + (AT ? '&until=' + AT : ''));
+    const j = await api('/state?since=' + lastId + '&vsince=' + lastVid + (AT ? '&until=' + AT : ''));
+    await voxSync(j);
     RULES = j.rules; MINE = new Set(j.mine); PRES = new Map(j.presence.map(r => [r.sheet, r.n]));
     const redo = new Set(), add = new Map();
     for (const id of j.hidden) if (!hiddenSet.has(id)) { hiddenSet.add(id); for (const [sh, l] of PATCHES) { const i = l.findIndex(p => p.id === id); if (i >= 0) { l.splice(i, 1); redo.add(sh); } } }
@@ -107,15 +108,77 @@ function whoAt(id, px, py) {
 }
 const whoTxt = p => !p ? '아직 아무도 칠하지 않은 곳이에요.' : `${MINE.has(p.id) ? '내가' : esc(p.name) + ' 님이'} ${p.mode === 'erase' ? '지웠어요' : '칠했어요'} · ${ago(p.at)}`;
 
-if (Q.has('debug')) globalThis.__cv = { whoAt, PATCHES, IMG, art, get cur() { return cur; } };
+if (Q.has('debug')) globalThis.__cv = { whoAt, PATCHES, IMG, art, map, get cur() { return cur; } };
 // 3D에서 벽을 누르면: 누가 칠했는지 + 그리기 버튼
 map.on('click', e => {
+  if (bmode === 'block') return;
   const pop = $('pop');
   if (!e.sheet) { pop.classList.remove('on'); if (e.building) toast('벽을 눌러 주세요.'); return; }
   const s = byId(e.sheet); if (!s) return; const { H, k } = sizeOf(s), p = whoAt(s.id, Math.floor(e.su * k), Math.floor(H - e.sv * k)), n = PRES.get(s.id) || 0;
   pop.innerHTML = `<h3>${esc(nameOf(s))}</h3><div class="m">${s.length.toFixed(0)}m × ${s.height.toFixed(0)}m${n ? ` · <span class="drawing">✏️ 지금 ${n}명이 그리는 중</span>` : ''}<br>누른 곳: ${whoTxt(p)}</div><div class="b"><button class="go2">✏️ 이 벽에 그리기</button><button class="x">닫기</button></div>`;
   pop.classList.add('on'); pop.querySelector('.go2').onclick = () => { pop.classList.remove('on'); openEditor(s, e.su, e.sv); }; pop.querySelector('.x').onclick = () => pop.classList.remove('on');
 });
+
+// ---------- 블록으로 꾸미기 ----------
+// 25cm 블록을 지도 위에 쌓고·지우고·칠한다. 한 번 누를 때 바뀐 칸들을 서버에 한 줄로 올리고, 다른 사람 것은 몇 초마다 받아 겹친다.
+let bmode = 'block', vtool = 'add', vcolor = '#c0392b', vsize = 1, vstamp = null;
+const VPAL = ['#c0392b', '#e8552e', '#f2c230', '#2e9b5f', '#1f6b3a', '#3b7dd8', '#7a55c7', '#ff9ec7', '#8a5a2b', '#f4f6f8', '#9aa39d', '#26392f', '#d9cbb0', '#8fd0ff', '#b8452c', '#4a5b3f', '#ffd76a'];
+// 기본 작품(놓은 뒤에도 블록이라 마음대로 고칠 수 있어요). [가로, 높이, 세로, 색], 0,0,0 = 누른 곳 바로 위
+const STAMPS = {
+  '🎄 트리': () => { const o = [], R = (a, b) => (Math.sin(a * 12.99 + b * 78.23) * 43758.5) % 1; for (let y = 0; y < 3; y++) for (const [x, z] of [[0, 0], [1, 0], [0, 1], [1, 1]]) o.push([x, y, z, '#6b4226']);
+    for (let y = 3; y < 15; y++) { const r = (15 - y) * .42 + .4; for (let x = -5; x <= 6; x++) for (let z = -5; z <= 6; z++) { const d = Math.hypot(x - .5, z - .5); if (d > r) continue; const edge = d > r - 1, h = Math.abs(R(x * 7 + y, z * 3 + y)); o.push([x, y, z, edge && h < .1 ? ['#c0392b', '#ffd76a', '#3b7dd8', '#f4f6f8'][Math.floor(h * 40) % 4] : (h < .5 ? '#1f6b3a' : '#2e7d4f')]); } }
+    for (const [x, y] of [[0, 15], [1, 15], [0, 16], [1, 16], [-1, 16], [2, 16], [0, 17], [1, 17]]) o.push([x, y, 0, '#ffd76a']); return o; },
+  '⛄ 눈사람': () => { const o = [], ball = (cy, r) => { for (let x = -4; x <= 4; x++) for (let y = -4; y <= 4; y++) for (let z = -4; z <= 4; z++) if (x * x + y * y + z * z <= r * r) o.push([x, cy + y, z, '#f4f6f8']); }; ball(3, 3.2); ball(8, 2.4); ball(12, 1.8);
+    o.push([-1, 13, -2, '#26392f'], [1, 13, -2, '#26392f'], [0, 12, -2, '#e8552e'], [0, 12, -3, '#e8552e'], [0, 9, -3, '#26392f'], [0, 7, -3, '#26392f'], [0, 5, -4, '#26392f']);
+    for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) o.push([x, 10, z, '#c0392b']); for (let y = 14; y < 17; y++) for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) o.push([x, y, z, '#26392f']); for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) o.push([x, 14, z, '#26392f']);
+    const m = new Map(); for (const q of o) m.set(q.slice(0, 3).join(), q); return [...m.values()]; },
+  '🎁 선물': () => { const o = [], mid = v => v === 1 || v === 2, edge = v => v === 0 || v === 3; for (let x = 0; x < 4; x++) for (let y = 0; y < 4; y++) for (let z = 0; z < 4; z++) o.push([x, y, z, (mid(x) && (edge(z) || y === 3)) || (mid(z) && (edge(x) || y === 3)) ? '#ffd76a' : '#c0392b']); o.push([1, 4, 1, '#ffd76a'], [2, 4, 2, '#ffd76a'], [1, 4, 2, '#ffd76a'], [2, 4, 1, '#ffd76a']); return o; },
+  '⭐ 별': () => { const o = [], P = [[0, 6], [-1, 5], [0, 5], [1, 5], [-1, 4], [0, 4], [1, 4], [-4, 3], [-3, 3], [-2, 3], [-1, 3], [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2], [-2, 1], [-1, 1], [0, 1], [1, 1], [2, 1], [-3, 0], [-2, 0], [2, 0], [3, 0]]; for (const [x, y] of P) o.push([x, y + 1, 0, '#ffd76a']); return o; },
+  '💚 리스': () => { const o = []; for (let x = -4; x <= 4; x++) for (let y = -4; y <= 4; y++) { const d = Math.hypot(x, y); if (d >= 2.4 && d <= 4.2) o.push([x, y + 5, 0, (x + y) % 3 === 0 ? '#c0392b' : '#1f6b3a']); } o.push([-1, 1, -1, '#c0392b'], [0, 1, -1, '#c0392b'], [1, 1, -1, '#c0392b']); return o; }
+};
+$('vcols').innerHTML = VPAL.map(c => `<button data-c="${c}" style="background:${c}" class="${c === vcolor ? 'on' : ''}" title="${c}"></button>`).join('') + '<button title="다른 색" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)"><input type="color" id="vpick" value="#c0392b" style="opacity:0"></button>';
+$('stamps').insertAdjacentHTML('beforeend', Object.keys(STAMPS).map(k => `<button data-st="${k}">${k}</button>`).join(''));
+function syncTool() {
+  document.querySelectorAll('#vtools button').forEach(b => b.classList.toggle('on', vstamp == null && b.dataset.v === vtool));
+  document.querySelectorAll('#stamps button').forEach(b => b.classList.toggle('on', b.dataset.st === vstamp));
+  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === vsize));
+  document.querySelectorAll('#vcols button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === vcolor));
+  const tool = bmode !== 'block' ? null : vstamp ? 'stamp' : vtool === 'look' ? null : vtool;
+  map.voxelMode({ tool, color: vcolor, size: vsize, stamp: vstamp ? STAMPS[vstamp]() : undefined });
+}
+$('btools').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v) { vtool = b.dataset.v; vstamp = null; }
+  else if (b.dataset.s) vsize = +b.dataset.s;
+  else if (b.dataset.c) { vcolor = b.dataset.c; if (vtool !== 'add' && vtool !== 'paint') vtool = 'add'; vstamp = null; }
+  else if (b.dataset.st) { vstamp = vstamp === b.dataset.st ? null : b.dataset.st; if (vstamp) toast(`${vstamp}를 놓을 곳을 눌러요. 놓은 뒤엔 블록이라 마음대로 고칠 수 있어요.`); }
+  else return;
+  syncTool();
+});
+$('vpick').oninput = () => { vcolor = $('vpick').value; vstamp = null; if (vtool !== 'paint') vtool = 'add'; syncTool(); };
+document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { bmode = b.dataset.m; document.querySelectorAll('#modes button').forEach(x => x.classList.toggle('on', x === b)); document.body.classList.toggle('wall', bmode === 'wall');
+  $('hint').textContent = bmode === 'block' ? '블록을 골라 학교 어디든 눌러 쌓아요. 드래그하면 돌려 볼 수 있어요' : '건물 벽을 누르면 그 벽이 도화지로 펼쳐져요'; $('pop').classList.remove('on'); syncTool(); if (bmode === 'block') map.focus({ building: '니콜스관', zoom: 55, pitch: .55 }).catch(() => {}); });
+// 서버와 맞추기
+const VROWS = [], VKNOWN = new Set(), VHID = new Set(), MYVOX = [];
+let lastVid = 0;
+async function rebuildVox() { const m = new Map(); for (const r of VROWS) if (!VHID.has(r.id)) for (const q of r.cells) { const k = q[0] + ',' + q[1] + ',' + q[2]; if (q[3]) m.set(k, q); else m.delete(k); } await map.voxelReset([...m.values()]); }
+async function voxSync(j) {
+  let redo = false;
+  for (const id of j.voxHidden || []) if (!VHID.has(id)) { VHID.add(id); if (VKNOWN.has(id)) redo = true; }
+  const fresh = [];
+  for (const r of j.vox || []) { lastVid = Math.max(lastVid, r.id); if (VKNOWN.has(r.id) || VHID.has(r.id)) continue; VKNOWN.add(r.id); VROWS.push(r); fresh.push(r); }
+  if (fresh.some(r => VROWS.some(q => q.id > r.id && !fresh.includes(q)))) redo = true; // 늦게 도착한 옛 줄이면 순서대로 다시
+  VROWS.sort((a, b) => a.id - b.id);
+  if (redo) await rebuildVox(); else for (const r of fresh) await map.voxelApply(r.cells);
+}
+map.on('voxel', async e => {
+  try { const j = await api('/voxels', { method: 'POST', body: { cells: e.cells } }); const r = { id: j.vox.id, name: j.vox.name, at: j.vox.at, cells: e.cells }; VKNOWN.add(r.id); VROWS.push(r); MYVOX.push(r); lastVid = Math.max(lastVid, 0); }
+  catch (er) { await map.voxelApply(e.before); toast(er.message, 3500); }
+});
+$('vundo').onclick = async () => {
+  const r = MYVOX.filter(q => !VHID.has(q.id)).pop(); if (!r) { toast('되돌릴 것이 없어요.'); return; }
+  try { await api(`/voxels/${r.id}`, { method: 'DELETE' }); VHID.add(r.id); await rebuildVox(); toast('되돌렸어요. 물감도 돌려받았어요.'); } catch (e) { toast(e.message); }
+};
 
 // ---------- 타임랩스: 하얀 학교가 칠해져 온 과정을 3D로 다시 보기 ----------
 let replaying = false;
@@ -166,7 +229,7 @@ function updLive() {
 async function openEditor(s, su, sv) {
   if (AT) { toast('기록 보기에서는 그릴 수 없어요. 지금 학교로 가서 그려 주세요.'); return; }
   if (replaying) return;
-  if (!me || !me.name) { toast('먼저 시작하기를 눌러 주세요.'); return; }
+  if (!me || !me.name) { if ($('start')) { toast('먼저 시작하기를 눌러 주세요.'); return; } }
   const { W, H: Hh, k } = sizeOf(s);
   cur = { s, k }; for (const c of [bs, fl, cv, gd]) { c.width = W; c.height = Hh; } paper.style.width = W + 'px'; paper.style.height = Hh + 'px';
   ctx.clearRect(0, 0, W, Hh); undo = []; redo = []; pendMode = null; drawBase();
@@ -312,7 +375,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => {
 
 // ---------- 시작 ----------
 $('startGo').onclick = async () => {
-  const name = $('nick').value.trim(); if (!name) { toast('닉네임을 정해 주세요.'); return; }
+  const name = $('nick').value.trim() || ('익명' + Math.floor(100 + Math.random() * 900));
   try { await api('/me', { method: 'POST', body: { name } }); $('start').remove(); drawPane(); toast(`물감 ${RULES.INK_MAX}㎡로 시작해요. 벽을 눌러 보세요!`); } catch (e) { toast(e.message); }
 };
 try { await refresh(); } catch (e) { toast(e.message, 5000); }
@@ -320,6 +383,9 @@ updCover();
 if ((me && me.name) || AT) $('start').remove();
 if (AT) { $('hint').textContent = `📸 ${when(AT)}의 모습 (기록 보기)`; }
 drawPane();
+syncTool();
+// 블록은 25cm라 가까이서 시작(멀리서 보면 점처럼 보임)
+if (!AT) map.focus({ building: '니콜스관', zoom: 55, pitch: .55 }).catch(() => {});
 // 실시간: 그리는 동안 2초, 둘러볼 땐 5초마다 새 획을 받는다(창을 안 볼 땐 쉼)
 let tick = 0; setInterval(async () => { tick++; if (AT || replaying || document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); if (!cur && tab === 'walls' && !$('pane').matches(':hover')) drawPane(); } catch (_) {} }, 1000);
 })().catch(e => { console.error(e); const p = document.getElementById('pane'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; });
