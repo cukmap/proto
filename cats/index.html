@@ -13,7 +13,14 @@
 body{font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#0f1a14;overflow:hidden}
 #map{position:fixed;inset:0}
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none}
-body.playing #hud{display:block}
+body.playing #hud,body.explore #hud{display:block}
+body.explore #timer,body.explore #score,body.explore #list,body.explore #ghostTag{display:none!important}
+#exTag{position:absolute;left:14px;top:14px;background:#0f1a14d9;color:#fff;border-radius:12px;padding:9px 13px;font-size:13.5px;font-weight:700;display:none}body.explore #exTag{display:block}
+#lobby{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:20;width:min(560px,calc(100% - 24px));background:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 14px 40px #0006}
+body:not(.home) #lobby{display:none}
+#lobby h1{margin:0;font-size:19px}#lobby p{margin:4px 0 12px;color:var(--mute);font-size:13.5px;line-height:1.5}
+#lobby .row .big{padding:14px 10px}#lobby .big small{display:block;font-weight:600;font-size:12px;opacity:.85;margin-top:2px}
+#lobby .lnk{display:block;margin:10px auto 0;font:inherit;font-size:12.5px;border:0;background:none;color:var(--mute);cursor:pointer;text-decoration:underline}
 #cross{position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);display:none}
 #cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px #0006}#cross:before{left:6px;top:0;width:2px;height:14px}#cross:after{top:6px;left:0;height:2px;width:14px}
 body.locked #cross{display:block}
@@ -28,7 +35,7 @@ body.locked #cross{display:block}
 #warm{margin-top:6px;padding-top:6px;border-top:1px solid #ffffff22;font-weight:800}
 #ghostTag{position:absolute;right:14px;top:58px;background:#0f1a14b3;color:#cfe3ff;border-radius:10px;padding:6px 10px;font-size:12.5px;display:none}
 #clickhint{position:absolute;left:50%;top:60%;transform:translateX(-50%);background:#000a;color:#fff;padding:10px 18px;border-radius:10px;font-size:15px;display:none}
-body.playing:not(.locked):not(.menu) #clickhint{display:block}
+body.playing:not(.locked):not(.menu) #clickhint,body.explore:not(.locked):not(.menu) #clickhint{display:block}
 #pop{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.8);font-size:22px;font-weight:900;color:#fff;text-shadow:0 2px 8px #000a;opacity:0;transition:all .25s}
 #pop.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .modal{position:fixed;inset:0;z-index:30;background:#0c1510a6;display:none;align-items:center;justify-content:center;padding:16px}
@@ -61,16 +68,31 @@ table.rk tr.me td{background:#fff3ec;font-weight:800}
   <div id="score">🐟 0 / 10</div>
   <div id="ghostTag"></div>
   <div id="list"><div class="t">오늘의 츄르가 있는 곳</div><ul id="ul"></ul><div id="warm"></div></div>
+  <div id="exTag">🐾 자유 탐방 · Esc 메뉴</div>
   <div id="clickhint">화면을 누르면 시작해요</div>
   <div id="pop"></div>
 </div>
 
-<div class="modal on" id="start"><div class="box">
+<div id="lobby">
+  <h1>🐈 치삼이와 성심교정 걷기</h1>
+  <p>마우스로 3D 지도를 돌려 보다가, 고양이가 되어 직접 걸어 보세요.</p>
+  <div class="row"><button class="big alt" id="toExplore">🐾 자유 탐방<small>시간 제한 없이 고양이 눈높이로 걷기</small></button><button class="big" id="toGame">🐟 츄르 게임<small>3분 동안 오늘의 츄르 모으기 · 랭킹</small></button></div>
+  <button class="lnk" id="toRank">오늘의 랭킹 보기</button>
+</div>
+
+<div class="modal" id="emenu"><div class="box">
+  <h2>자유 탐방</h2><p class="sub">시간 제한 없이 마음껏 걸어 다녀요.</p>
+  <button class="big" id="eResume">▶ 계속 걷기</button>
+  <div class="row" style="margin-top:8px"><button class="big alt" id="eGame">🐟 츄르 게임 하기</button><button class="big alt" id="eOut">3D 지도로 나가기</button></div>
+  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>이 메뉴</span></div>
+</div></div>
+
+<div class="modal" id="start"><div class="box">
   <h2>🐈 치삼이의 츄르 대작전</h2>
   <p class="sub">치삼이가 되어 성심교정을 돌아다니며 <b>3분 안에 츄르를 최대한 많이</b> 모으세요. 츄르는 오늘 하루 모두 같은 곳에 있고, 내일이면 자리가 바뀌어요. 어디에 있는지는 <b>장소 이름</b>만 알려 줘요. 학교를 잘 아는 고양이가 이겨요.</p>
   <div class="row"><div><label class="f" for="nick">닉네임</label><input class="f" id="nick" maxlength="12" placeholder="예: 성심고양이"></div>
     <div><label class="f" for="dept">학과 (선택)</label><input class="f" id="dept" maxlength="20" placeholder="예: 미디어기술콘텐츠학과"></div></div>
-  <button class="big" id="go" style="margin-top:14px">오늘의 판 시작</button>
+  <div class="row" style="margin-top:14px"><button class="big alt" id="back" style="flex:0 0 30%">← 돌아가기</button><button class="big" id="go">오늘의 판 시작</button></div>
   <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프(고양이라 높이 뛰어요)</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>잠깐 멈춤</span></div>
   <div class="sec" id="rkTitle">오늘의 랭킹</div><div id="rkStart"></div>
 </div></div>
@@ -79,13 +101,14 @@ table.rk tr.me td{background:#fff3ec;font-weight:800}
   <h2>잠깐 멈춤</h2><p class="sub">멈춘 동안은 시간이 흐르지 않아요.</p>
   <button class="big" id="resume">▶ 계속하기</button>
   <div class="row" style="margin-top:8px"><button class="big alt" id="restart">처음부터 다시</button><button class="big alt" id="quit">그만하고 랭킹 보기</button></div>
+  <button class="big alt" id="gOut" style="margin-top:8px">3D 지도로 나가기(기록 안 남김)</button>
 </div></div>
 
 <div class="modal" id="end"><div class="box">
   <h2 id="endTitle">끝!</h2>
   <div class="res" id="endScore"></div>
   <p class="sub" id="endSub" style="text-align:center"></p>
-  <div class="row"><button class="big" id="again">한 판 더</button><button class="big alt" id="home">처음 화면</button></div>
+  <div class="row"><button class="big" id="again">한 판 더</button><button class="big alt" id="home">3D 지도로</button></div>
   <div id="rkEnd"></div>
 </div></div>
 <div id="toast"></div>
@@ -202,8 +225,27 @@ function tick() {
 setInterval(tick, 100); // 화면 그리기와 따로 돌아서 지도가 무거워도 시간은 정확
 window.__cats = { get G() { return G; }, get pos() { return pos; } }; // 자동 시험용
 
+// 모드: home(3D 지도) · explore(자유 탐방) · game(츄르 게임)
+let mode = 'home';
+async function flyOnCat() { if (flyOn) return; flyOn = true; await map.voxelFly({ on: true, walk: true, body: 'cat', building: '니콜스관' }); }
+async function clearGame() { if (T) await Promise.all(T.spots.map(s => map.voxelUnstamp('ch-' + s.id).catch(() => {}))); await map.voxelUnstamp('ghost').catch(() => {}); G = null; ghost = null; }
+function setMode(m) { mode = m; for (const c of ['home', 'explore', 'playing']) document.body.classList.toggle(c, (m === 'game' ? 'playing' : m) === c); }
+async function goHome() { await clearGame(); open(null); setMode('home'); if (flyOn) { flyOn = false; pos = null; await map.voxelFly({ on: false }).catch(() => {}); } document.body.classList.remove('locked'); }
+async function goExplore() { await clearGame(); open(null); setMode('explore'); await flyOnCat(); toast('화면을 누르고 W A S D로 걸어 보세요. Esc를 누르면 메뉴가 나와요.', 4500); }
+async function goGameSetup() { await showStartBoard(); open('start'); }
+$('toExplore').onclick = goExplore;
+$('toGame').onclick = goGameSetup;
+$('toRank').onclick = goGameSetup;
+$('back').onclick = () => { open(mode === 'explore' ? 'emenu' : null); };
+$('eResume').onclick = () => { open(null); toast('화면을 누르면 이어서 걸어요.'); };
+$('eGame').onclick = goGameSetup;
+$('eOut').onclick = goHome;
+$('gOut').onclick = goHome;
+setMode('home');
+
 map.on('fly', e => {
   if ('locked' in e) { document.body.classList.toggle('locked', e.locked);
+    if (mode === 'explore') { if (e.locked) open(null); else if (!document.querySelector('.modal.on')) open('emenu'); }
     if (G && !G.over) { if (e.locked) { G.running = true; open(null); } else { G.running = false; if (!document.querySelector('.modal.on')) open('menu'); } } }
   if (e.pos) { pos = e.pos; if (!START) START = { x: pos[0], z: pos[2], yaw: e.yaw };
     if (G && G.running && !G.over) { for (const s of T.spots) if (!G.got.has(s.id) && Math.hypot(pos[0] - s.x, pos[2] - s.z) < T.rules.near) eat(s); warmth(); } }
@@ -213,15 +255,15 @@ $('go').onclick = async () => {
   const name = $('nick').value.trim(); if (!name) { toast('닉네임을 적어 주세요. 랭킹에 나와요.'); $('nick').focus(); return; }
   ls.set('cukcats.name', name); ls.set('cukcats.dept', $('dept').value.trim());
   if (!T) { toast('오늘의 판을 불러오지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
-  open(null); document.body.classList.add('playing');
-  if (!flyOn) { flyOn = true; await map.voxelFly({ on: true, walk: true, body: 'cat', building: '니콜스관' }); }
+  open(null); setMode('game');
+  await flyOnCat();
   await newRound(); toast('화면을 누르면 3분이 시작돼요. 장소 이름을 보고 츄르를 찾아가요!', 4500);
 };
 $('resume').onclick = () => { open(null); toast('화면을 누르면 이어서 해요.'); };
 $('restart').onclick = async () => { open(null); await newRound(); toast('처음부터 다시! 화면을 누르면 시작해요.'); };
 $('quit').onclick = () => finish(true);
 $('again').onclick = async () => { open(null); await newRound(); toast('화면을 누르면 3분이 시작돼요.'); };
-$('home').onclick = async () => { await showStartBoard(); open('start'); };
+$('home').onclick = goHome;
 
 try { await loadToday(); } catch (e) { toast(e.message, 6000); }
 await showStartBoard();
