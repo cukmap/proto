@@ -84,7 +84,7 @@ table.rk tr.me td{background:#fff3ec;font-weight:800}
   <h2>자유 탐방</h2><p class="sub">시간 제한 없이 마음껏 걸어 다녀요.</p>
   <button class="big" id="eResume">▶ 계속 걷기</button>
   <div class="row" style="margin-top:8px"><button class="big alt" id="eGame">🐟 츄르 게임 하기</button><button class="big alt" id="eOut">3D 지도로 나가기</button></div>
-  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>이 메뉴</span></div>
+  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프</span><b>Shift</b><span>달리기 (W를 빠르게 두 번 눌러도 돼요)</span><b>Esc</b><span>이 메뉴</span></div>
 </div></div>
 
 <div class="modal" id="start"><div class="box">
@@ -93,7 +93,7 @@ table.rk tr.me td{background:#fff3ec;font-weight:800}
   <div class="row"><div><label class="f" for="nick">닉네임</label><input class="f" id="nick" maxlength="12" placeholder="예: 성심고양이"></div>
     <div><label class="f" for="dept">학과 (선택)</label><input class="f" id="dept" maxlength="20" placeholder="예: 미디어기술콘텐츠학과"></div></div>
   <div class="row" style="margin-top:14px"><button class="big alt" id="back" style="flex:0 0 30%">← 돌아가기</button><button class="big" id="go">오늘의 판 시작</button></div>
-  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프(고양이라 높이 뛰어요)</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>잠깐 멈춤</span></div>
+  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프(고양이라 높이 뛰어요)</span><b>Shift</b><span>달리기 (W를 빠르게 두 번 눌러도 돼요)</span><b>Esc</b><span>잠깐 멈춤</span></div>
   <div class="sec" id="rkTitle">오늘의 랭킹</div><div id="rkStart"></div>
 </div></div>
 
@@ -242,6 +242,8 @@ $('eGame').onclick = goGameSetup;
 $('eOut').onclick = goHome;
 $('gOut').onclick = goHome;
 setMode('home');
+// 실수로 창을 닫지 않게(Ctrl+W 등): 걷는 중엔 닫기 전에 한 번 물어봄
+addEventListener('beforeunload', e => { if (mode !== 'home') { e.preventDefault(); e.returnValue = ''; } });
 
 map.on('fly', e => {
   if ('locked' in e) { document.body.classList.toggle('locked', e.locked);
