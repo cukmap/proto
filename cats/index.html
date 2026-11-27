@@ -3,164 +3,228 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>캣츠 · 성심교정 고양이 찾기</title>
-<!-- 시안: cukmap 3D 지도(실제 모습)의 지상 시점으로 학교를 걸어 다니며(실내 없음), 학교 곳곳(별명 붙은 길·계단·언덕)에 숨은 고양이를 찾는다.
-     힌트가 실제 장소라서, 힌트를 따라가다 보면 학교 지리를 알게 된다. 조작은 마인크래프트처럼(날기 없음). -->
+<title>치삼이의 츄르 대작전 · 성심교정</title>
+<!-- 시안: 고양이(치삼이)가 되어 cukmap 3D 지도(실제 모습, 실내 없음)를 고양이 눈높이로 돌아다니며 츄르를 모은다.
+     한 판 3분, 오늘의 츄르 10개(날짜마다 자리가 바뀌고 모두 같은 판). 오늘 랭킹 · 학과별 합계 · 1등의 고스트 고양이와 경주.
+     츄르 자리 이름이 실제 장소라서, 잘하려면 학교 지리를 알아야 한다 → 랭킹이 학교 지리를 익히는 동기. 서버: cukmap.com/api/cats -->
 <style>
 :root{--g:#244f3d;--o:#e8552e;--ink:#26392f;--mute:#6b7a70;--line:#dfe7e0;--bg:#f7faf7}
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--ink);background:#0f1a14;overflow:hidden}
 #map{position:fixed;inset:0}
-#hud{position:fixed;inset:0;pointer-events:none;z-index:10}
-#cross{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);display:none}
-#cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px #0006}#cross:before{left:8px;top:0;width:2px;height:18px}#cross:after{top:8px;left:0;height:2px;width:18px}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none}
+body.playing #hud{display:block}
+#cross{position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);display:none}
+#cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px #0006}#cross:before{left:6px;top:0;width:2px;height:14px}#cross:after{top:6px;left:0;height:2px;width:14px}
 body.locked #cross{display:block}
-#quest{position:absolute;left:14px;top:14px;width:min(340px,calc(100% - 28px));background:#0f1a14d9;color:#fff;border-radius:14px;padding:12px 14px;box-shadow:0 6px 20px #0005}
-#quest .t{font-size:12px;color:#b9d3c4;font-weight:700;letter-spacing:.5px}
-#quest .n{font-size:17px;font-weight:800;margin:3px 0}
-#quest .h{font-size:13.5px;line-height:1.55;color:#e8f1ec}
-#warm{margin-top:8px;font-size:14px;font-weight:800}
-#count{position:absolute;right:14px;top:14px;background:#0f1a14d9;color:#fff;border-radius:12px;padding:9px 13px;font-size:14px;font-weight:800}
-#clickhint{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:#000a;color:#fff;padding:10px 18px;border-radius:10px;font-size:15px;display:none}
-body.ready:not(.locked):not(.menu) #clickhint{display:block}
+#timer{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#0f1a14d9;color:#fff;border-radius:12px;padding:8px 16px;font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:1px}
+#timer.low{color:#ff8a65}
+#score{position:absolute;right:14px;top:14px;background:#0f1a14d9;color:#fff;border-radius:12px;padding:9px 13px;font-size:15px;font-weight:800}
+#list{position:absolute;left:14px;top:14px;width:min(300px,calc(50% - 20px));background:#0f1a14d9;color:#fff;border-radius:14px;padding:10px 12px;font-size:13px;line-height:1.45}
+#list .t{font-size:12px;color:#b9d3c4;font-weight:800;margin-bottom:4px}
+#list li{list-style:none;padding:2px 0}#list ul{margin:0;padding:0}
+#list li.got{color:#7f9a8b;text-decoration:line-through}
+#list li small{color:#b9d3c4}
+#warm{margin-top:6px;padding-top:6px;border-top:1px solid #ffffff22;font-weight:800}
+#ghostTag{position:absolute;right:14px;top:58px;background:#0f1a14b3;color:#cfe3ff;border-radius:10px;padding:6px 10px;font-size:12.5px;display:none}
+#clickhint{position:absolute;left:50%;top:60%;transform:translateX(-50%);background:#000a;color:#fff;padding:10px 18px;border-radius:10px;font-size:15px;display:none}
+body.playing:not(.locked):not(.menu) #clickhint{display:block}
+#pop{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%) scale(.8);font-size:22px;font-weight:900;color:#fff;text-shadow:0 2px 8px #000a;opacity:0;transition:all .25s}
+#pop.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .modal{position:fixed;inset:0;z-index:30;background:#0c1510a6;display:none;align-items:center;justify-content:center;padding:16px}
 .modal.on{display:flex}
-.box{width:min(560px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:16px;padding:20px 22px;box-shadow:0 18px 50px #0005}
-.box h2{margin:0 0 6px;font-size:21px}.box .sub{margin:0 0 14px;color:var(--mute);font-size:14px;line-height:1.6}
+.box{width:min(600px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;padding:20px 22px;box-shadow:0 18px 50px #0005}
+.box h2{margin:0 0 6px;font-size:21px}.box .sub{margin:0 0 12px;color:var(--mute);font-size:14px;line-height:1.6}
 .big{width:100%;font:inherit;font-size:15px;font-weight:800;padding:12px;border:0;border-radius:10px;background:var(--o);color:#fff;cursor:pointer}
-.keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;color:#33463b;margin-top:14px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.big.alt{background:#eef3ef;color:var(--g)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+label.f{display:block;font-size:12.5px;font-weight:700;color:var(--mute);margin:8px 0 4px}
+input.f{width:100%;font:inherit;font-size:15px;padding:10px 12px;border:1px solid #cfdcd3;border-radius:10px}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;color:#33463b;margin-top:12px;background:var(--bg);border-radius:10px;padding:10px 12px}
 .keys b{font-family:ui-monospace,monospace;font-size:12px;background:#fff;border:1px solid #d7e2db;border-radius:5px;padding:1px 6px;justify-self:start}
 .sec{font-size:14px;font-weight:800;margin:16px 2px 6px;color:var(--g)}
-.dex{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.cat{border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;background:#fff;cursor:pointer;font:inherit}
-.cat .f{font-size:30px}.cat b{display:block;font-size:13.5px;margin-top:2px}.cat small{display:block;font-size:11.5px;color:var(--mute);margin-top:2px;line-height:1.4}
-.cat.lock{background:#f1f3f1;color:#9aa39d}.cat.on{outline:3px solid var(--o)}
-.cat.lock .f{filter:grayscale(1) brightness(.4)}
-#found .f{font-size:64px;text-align:center}#found h2{text-align:center}
+table.rk{width:100%;border-collapse:collapse;font-size:13.5px}
+table.rk td{padding:5px 6px;border-bottom:1px solid var(--line)}
+table.rk td.n{width:34px;font-weight:900;color:var(--g)}table.rk td.s{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+table.rk tr.me td{background:#fff3ec;font-weight:800}
+.empty{color:var(--mute);font-size:13px;padding:6px 2px}
+.res{font-size:44px;font-weight:900;text-align:center;margin:6px 0}
+.res small{font-size:16px;color:var(--mute);font-weight:700}
+.tabs{display:flex;gap:6px;margin:14px 0 6px}.tabs button{font:inherit;font-size:13px;font-weight:800;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer;color:var(--mute)}.tabs button.on{background:var(--g);color:#fff;border-color:var(--g)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d3a2c;color:#fff;font-size:13.5px;padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60}#toast.on{opacity:1}
-#start input{width:100%}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="hud"><div id="cross"></div>
-  <div id="quest"><div class="t">찾는 중</div><div class="n" id="qn"></div><div class="h" id="qh"></div><div id="warm"></div></div>
-  <div id="count"></div>
-  <div id="clickhint">화면을 누르면 걸을 수 있어요</div>
+  <div id="timer">3:00</div>
+  <div id="score">🐟 0 / 10</div>
+  <div id="ghostTag"></div>
+  <div id="list"><div class="t">오늘의 츄르가 있는 곳</div><ul id="ul"></ul><div id="warm"></div></div>
+  <div id="clickhint">화면을 누르면 시작해요</div>
+  <div id="pop"></div>
 </div>
 
 <div class="modal on" id="start"><div class="box">
-  <h2>🐈 성심교정 고양이를 찾아라</h2>
-  <p class="sub">학교 곳곳, 별명이 붙은 길과 계단과 언덕에 고양이들이 숨어 있어요. 힌트를 읽고 <b>직접 걸어서</b> 찾아가 보세요. 가까이 가면 고양이를 만날 수 있어요.</p>
-  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>메뉴·도감</span></div>
-  <button class="big" id="go" style="margin-top:16px">들어가기</button>
+  <h2>🐈 치삼이의 츄르 대작전</h2>
+  <p class="sub">치삼이가 되어 성심교정을 돌아다니며 <b>3분 안에 츄르를 최대한 많이</b> 모으세요. 츄르는 오늘 하루 모두 같은 곳에 있고, 내일이면 자리가 바뀌어요. 어디에 있는지는 <b>장소 이름</b>만 알려 줘요. 학교를 잘 아는 고양이가 이겨요.</p>
+  <div class="row"><div><label class="f" for="nick">닉네임</label><input class="f" id="nick" maxlength="12" placeholder="예: 성심고양이"></div>
+    <div><label class="f" for="dept">학과 (선택)</label><input class="f" id="dept" maxlength="20" placeholder="예: 미디어기술콘텐츠학과"></div></div>
+  <button class="big" id="go" style="margin-top:14px">오늘의 판 시작</button>
+  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프(고양이라 높이 뛰어요)</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>잠깐 멈춤</span></div>
+  <div class="sec" id="rkTitle">오늘의 랭킹</div><div id="rkStart"></div>
 </div></div>
 
 <div class="modal" id="menu"><div class="box">
-  <h2>도감</h2><p class="sub" id="dexsub"></p>
-  <button class="big" id="resume">▶ 계속 찾기</button>
-  <div class="sec">어떤 고양이를 찾을까요? (누르면 그 고양이 힌트로 바뀌어요)</div>
-  <div class="dex" id="dex"></div>
-  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프</span><b>Ctrl</b><span>달리기</span><b>Esc</b><span>이 메뉴</span></div>
-  <button id="reset" style="margin-top:12px;font:inherit;font-size:12.5px;border:0;background:none;color:var(--mute);cursor:pointer;text-decoration:underline">처음부터 다시 하기</button>
+  <h2>잠깐 멈춤</h2><p class="sub">멈춘 동안은 시간이 흐르지 않아요.</p>
+  <button class="big" id="resume">▶ 계속하기</button>
+  <div class="row" style="margin-top:8px"><button class="big alt" id="restart">처음부터 다시</button><button class="big alt" id="quit">그만하고 랭킹 보기</button></div>
 </div></div>
 
-<div class="modal" id="found"><div class="box">
-  <div class="f" id="ff"></div><h2 id="fn"></h2><p class="sub" id="fs"></p>
-  <button class="big" id="fnext">다음 고양이 찾기</button>
+<div class="modal" id="end"><div class="box">
+  <h2 id="endTitle">끝!</h2>
+  <div class="res" id="endScore"></div>
+  <p class="sub" id="endSub" style="text-align:center"></p>
+  <div class="row"><button class="big" id="again">한 판 더</button><button class="big alt" id="home">처음 화면</button></div>
+  <div id="rkEnd"></div>
 </div></div>
 <div id="toast"></div>
 
 <script src="https://cukmap.com/kit/v1/cukmap.js"></script>
 <script>
 (async () => {
+const API = 'https://cukmap.com/api/cats';
 const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const toast = (t, ms = 2800) => { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms); };
-const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1) - 0xAC00; return w + (c >= 0 && c <= 11171 && c % 28 ? a : b); };
+const ls = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch (_) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} } };
+let ID = ls.get('cukcats.id', ''); if (!/^[A-Za-z0-9_-]{20,64}$/.test(ID)) { ID = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'[b & 63]).join(''); ls.set('cukcats.id', ID); }
+const api = async (p, o = {}) => { const r = await fetch(API + p, { ...o, headers: { 'content-type': 'application/json', 'x-cats-id': ID, ...(o.headers || {}) } }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || '서버에 닿지 않았어요.'); return j; };
+const mmss = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const secs = ms => (ms / 1000).toFixed(1) + '초';
+$('nick').value = ls.get('cukcats.name', ''); $('dept').value = ls.get('cukcats.dept', '');
 
-// 고양이와 숨은 곳. 장소는 학생들이 부르는 별명이 있는 곳 위주(실제 지도 좌표)
-const CATS = [
-  { id: 'cheese', name: '치즈', face: '🐈', at: [106, 140], spot: '고양이길(메이플로드)', hint: '이름부터 고양이 길. 니콜스관 동쪽 아래, 가을이면 단풍이 빨갛게 덮이는 길이에요.', look: { base: '#e8a04a', b: '#fff4e0', pat: 'stripe', p: '#c9772a' } },
-  { id: 'black', name: '까망이', face: '🐈‍⬛', at: [97, -17], spot: '낭만계단', hint: '스머프동산 동쪽 비탈을 오르는 계단 중간쯤, 볕 드는 곳에서 자요.', look: { base: '#26292b', b: '#26292b' } },
-  { id: 'calico', name: '삼색이', face: '🐱', at: [37, 10], spot: '스머프동산(하늘동산)', hint: '학생미래인재관 앞, 동그랗게 솟은 잔디 언덕 꼭대기를 좋아해요.', look: { base: '#f4f1ea', b: '#f4f1ea', pat: 'patch', p: '#e8a04a', p2: '#2b2b2b' } },
-  { id: 'mackerel', name: '고등어', face: '😺', at: [-2, 90], spot: '통곡의 언덕', hint: '다솔관 북쪽 옆 가파른 오르막. 지각하는 학생들을 구경해요.', look: { base: '#8d9296', b: '#e9ecee', pat: 'stripe', p: '#4b5056' } },
-  { id: 'tuxedo', name: '턱시도', face: '😸', at: [-72, 0], spot: '도서관 앞 삼거리', hint: '중앙도서관 앞, 미카엘관 쪽으로 길이 갈라지는 곳에서 사람들을 기다려요.', look: { base: '#222426', b: '#f4f4f2' } },
-  { id: 'yellow', name: '노랑이', face: '😻', at: [-261, -110], spot: '성심관 벚꽃길', hint: '봄이면 벚꽃이 터널처럼 덮이는 성심관 쪽 길. 학교 서쪽 끝이에요.', look: { base: '#f2c46a', b: '#f2c46a' } },
-  { id: 'grey', name: '회색이', face: '😼', at: [278, 85], spot: '정문 오르막', hint: '정문으로 들어와 김수환관 쪽으로 오르는 비탈. 학교에 오는 사람을 제일 먼저 봐요.', look: { base: '#9aa1a6', b: '#9aa1a6' } },
-  { id: 'spot', name: '점박이', face: '🙀', at: [24, 123], spot: '다솜길', hint: '다솔관과 밤비노관 사이 좁은 길. 이름도 비슷해서 헷갈려요.', look: { base: '#f4f4f2', b: '#f4f4f2', pat: 'patch', p: '#2b2b2b' } },
-];
-const LEGEND = { id: 'chisam', name: '치삼이', face: '🌟', at: [133, 166], spot: '예수성심광장', hint: '모든 고양이를 모은 사람에게만 나타나요. 학교 한가운데 성당 앞 광장에서 기다린대요.', look: { base: '#ffd76a', b: '#fff6d6', pat: 'stripe', p: '#e8a04a' } };
-const ALL = [...CATS, LEGEND];
-const NEAR = 3.2; // 이만큼(m) 가까이 가면 만남
-
-// 블록 고양이(한 칸 25cm): 몸 3칸 길이, 머리, 귀, 꼬리. 앞쪽이 -z
+// 블록 모형(한 칸 25cm)
 function catCells(L) {
-  const o = [], h = (x, y, z) => Math.abs(Math.sin(x * 12.9 + y * 78.2 + z * 37.7) * 43758) % 1;
-  const col = (x, y, z, part) => { if (part === 'belly') return L.b; if (L.pat === 'stripe' && (z % 2 === 0)) return L.p; if (L.pat === 'patch') { const r = h(x, y, z); if (r < .25) return L.p; if (L.p2 && r < .4) return L.p2; } return L.base; };
-  for (let x = 0; x < 2; x++) for (let z = 0; z < 3; z++) o.push([x, 1, z, col(x, 1, z)], [x, 0, z, col(x, 0, z, 'belly')]); // 몸
-  for (const [x, z] of [[0, 0], [1, 0], [0, 2], [1, 2]]) o.push([x, -1, z, L.b]); // 다리
-  for (let x = 0; x < 2; x++) for (let y = 1; y < 3; y++) o.push([x, y, -1, col(x, y, -1)]); // 머리
-  o.push([0, 3, -1, L.base], [1, 3, -1, L.base]); // 귀
-  o.push([0, 2, -2, '#1d2a22'], [1, 2, -2, '#1d2a22'], [0, 1, -2, '#ff9ec7']); // 눈·코(앞면)
-  o.push([0, 1, 3, L.base], [0, 2, 3, L.base], [0, 3, 3, L.base]); // 꼬리
+  const o = [], col = (z, part) => part === 'belly' ? L.b : (L.pat === 'stripe' && z % 2 === 0) ? L.p : L.base;
+  for (let x = 0; x < 2; x++) for (let z = 0; z < 3; z++) o.push([x, 1, z, col(z)], [x, 0, z, col(z, 'belly')]);
+  for (const [x, z] of [[0, 0], [1, 0], [0, 2], [1, 2]]) o.push([x, -1, z, L.b]);
+  for (let x = 0; x < 2; x++) for (let y = 1; y < 3; y++) o.push([x, y, -1, col(-1)]);
+  o.push([0, 3, -1, L.base], [1, 3, -1, L.base], [0, 2, -2, '#1d2a22'], [1, 2, -2, '#1d2a22'], [0, 1, 3, L.base], [0, 2, 3, L.base], [0, 3, 3, L.base]);
   return o.map(q => [q[0], q[1] + 1, q[2], q[3]]);
 }
-
-// 기록(이 브라우저에만)
-let got = new Set(); try { got = new Set(JSON.parse(localStorage.getItem('cukcats.got') || '[]')); } catch (_) {}
-const save = () => { try { localStorage.setItem('cukcats.got', JSON.stringify([...got])); } catch (_) {} };
-const pool = () => CATS.every(c => got.has(c.id)) ? ALL : CATS;
-let target = null;
-const pickNext = () => pool().find(c => !got.has(c.id)) || null;
+const GHOST = catCells({ base: '#bcd6ff', b: '#e6f0ff' });
+// 츄르: 세워 둔 봉지(주황 몸통, 흰 띠, 보라 뚜껑) + 받침
+const CHURU = [];
+for (let y = 0; y < 4; y++) for (let x = 0; x < 2; x++) CHURU.push([x, y, 0, y === 3 ? '#7b4bd8' : y === 1 ? '#ffffff' : '#ff8a3d']);
+CHURU.push([0, 4, 0, '#7b4bd8']);
 
 const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
-let started = false, pos = null;
 
-function drawQuest() {
-  const all = pool(), n = all.filter(c => got.has(c.id)).length;
-  $('count').textContent = `🐾 ${n} / ${all.length}`;
-  if (!target) { $('qn').textContent = '모든 고양이를 찾았어요!'; $('qh').textContent = 'Esc를 눌러 도감을 보세요.'; $('warm').textContent = ''; return; }
-  $('qn').textContent = `${target.face} ??? — ${target.spot}`; $('qh').textContent = target.hint;
+// 오늘의 판
+let T = null;
+async function loadToday() { T = await api('/today'); }
+async function loadBoard() { try { return await api('/board'); } catch (e) { return null; } }
+function rankHtml(B, title) {
+  if (!B) return '<div class="empty">랭킹을 불러오지 못했어요.</div>';
+  const top = B.top.length ? `<table class="rk">${B.top.map(r => `<tr class="${r.me ? 'me' : ''}"><td class="n">${r.rank}</td><td>${esc(r.name)}${r.dept ? ` <small style="color:var(--mute)">${esc(r.dept)}</small>` : ''}</td><td class="s">🐟 ${r.score} · ${secs(r.ms)}</td></tr>`).join('')}</table>` : '<div class="empty">아직 아무도 안 했어요. 첫 기록의 주인공이 되어 보세요!</div>';
+  const dp = B.depts.length ? `<table class="rk">${B.depts.map((d, i) => `<tr><td class="n">${i + 1}</td><td>${esc(d.dept)} <small style="color:var(--mute)">${d.people}명</small></td><td class="s">🐟 ${d.total}</td></tr>`).join('')}</table>` : '<div class="empty">학과를 적고 하면 학과별 합계에 들어가요.</div>';
+  const me = B.me ? `<p class="sub" style="margin:8px 2px 0">내 오늘 최고 기록: <b>${B.me.rank}등</b> (🐟 ${B.me.score} · ${secs(B.me.ms)}) · 오늘 ${B.players}명 참여</p>` : `<p class="sub" style="margin:8px 2px 0">오늘 ${B.players}명 참여</p>`;
+  const id = 'tb' + Math.random().toString(36).slice(2, 7);
+  setTimeout(() => { const w = document.getElementById(id); if (!w) return; w.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { w.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b)); w.querySelector('.p1').style.display = b.dataset.t === '1' ? '' : 'none'; w.querySelector('.p2').style.display = b.dataset.t === '2' ? '' : 'none'; }); });
+  return `<div id="${id}">${title ? `<div class="sec">${title}</div>` : ''}<div class="tabs"><button class="on" data-t="1">개인</button><button data-t="2">학과별 합계</button></div><div class="p1">${top}</div><div class="p2" style="display:none">${dp}</div>${me}</div>`;
+}
+async function showStartBoard() { const B = await loadBoard(); $('rkTitle').textContent = `오늘의 랭킹 (${T ? T.day : ''})`; $('rkStart').innerHTML = rankHtml(B, ''); return B; }
+
+// 한 판 상태
+let G = null, pos = null, flyOn = false, START = null, ghost = null;
+function open(id) { document.querySelectorAll('.modal').forEach(m => m.classList.toggle('on', m.id === id)); document.body.classList.toggle('menu', !!id); }
+function drawList() {
+  $('ul').innerHTML = T.spots.map(s => `<li class="${G.got.has(s.id) ? 'got' : ''}">🐟 ${esc(s.name)} <small>— ${esc(s.hint)}</small></li>`).join('');
+  $('score').textContent = `🐟 ${G.got.size} / ${T.spots.length}`;
 }
 function warmth() {
-  if (!target || !pos) return;
-  const d = Math.hypot(pos[0] - target.at[0], pos[2] - target.at[1]);
-  const w = d < 10 ? ['🔥 바로 근처예요! 둘러보세요', '#ff8a65'] : d < 30 ? ['♨️ 아주 가까워요', '#ffb74d'] : d < 70 ? ['🌤 가까워지고 있어요', '#ffe082'] : d < 150 ? ['🍃 조금 멀어요', '#c5e1a5'] : ['❄️ 멀어요', '#b3e5fc'];
+  const left = T.spots.filter(s => !G.got.has(s.id)); if (!left.length || !pos) { $('warm').textContent = ''; return; }
+  const d = Math.min(...left.map(s => Math.hypot(pos[0] - s.x, pos[2] - s.z)));
+  const w = d < 10 ? ['🔥 바로 근처에 츄르 냄새가!', '#ff8a65'] : d < 30 ? ['♨️ 츄르가 아주 가까워요', '#ffb74d'] : d < 70 ? ['🌤 가까운 츄르까지 조금만 더', '#ffe082'] : ['🍃 가까운 츄르도 아직 멀어요', '#c5e1a5'];
   $('warm').textContent = w[0]; $('warm').style.color = w[1];
-  if (d < NEAR) found(target);
 }
-async function placeCats() { for (const c of pool()) if (!got.has(c.id)) await map.voxelStamp({ id: c.id, x: c.at[0], z: c.at[1], rot: Math.floor(Math.random() * 4), cells: catCells(c.look) }).catch(() => {}); }
-async function found(c) {
-  if (got.has(c.id)) return; got.add(c.id); save(); await map.voxelUnstamp(c.id).catch(() => {});
-  await map.voxelFly({ unlock: true }).catch(() => {}); // 지도 안에 잡힌 마우스를 풀어야 버튼을 누를 수 있어요
-  $('ff').textContent = c.face; $('fn').textContent = `${josa(c.name, '을', '를')} 찾았어요!`;
-  const legend = c === LEGEND, fin = !legend && CATS.every(x => got.has(x.id));
-  $('fs').innerHTML = `여기는 <b>${c.spot}</b>이에요.<br>${c.hint}` + (fin ? '<br><br>🌟 모든 고양이를 모았어요! 전설의 고양이 <b>치삼이</b>가 나타났대요.' : '');
-  if (fin) await map.voxelStamp({ id: LEGEND.id, x: LEGEND.at[0], z: LEGEND.at[1], cells: catCells(LEGEND.look) }).catch(() => {});
-  target = pickNext(); drawQuest(); open('found');
+async function placeChuru() { await Promise.all(T.spots.map(s => map.voxelStamp({ id: 'ch-' + s.id, x: s.x, z: s.z, cells: CHURU }).catch(() => {}))); }
+function pop(t) { const el = $('pop'); el.textContent = t; el.classList.add('on'); clearTimeout(pop.t); pop.t = setTimeout(() => el.classList.remove('on'), 1100); }
+
+async function newRound() {
+  G = { t: 0, got: new Set(), gotT: [], path: [], nextP: 0, over: true, running: false }; // 준비가 끝날 때까지는 시작 안 함
+  drawList(); $('clickhint').textContent = '츄르를 놓는 중…';
+  await placeChuru(); warmth(); $('timer').textContent = mmss(T.rules.roundS); $('timer').classList.remove('low');
+  if (START) await map.voxelFly({ teleport: true, x: START.x, z: START.z, yaw: START.yaw }).catch(() => {});
+  if (pos && START) pos = [START.x, pos[1], START.z];
+  // 오늘 1등의 고스트
+  const B = await loadBoard(); ghost = B && B.ghost && B.ghost.path.length > 1 ? B.ghost : null;
+  $('ghostTag').style.display = ghost ? 'block' : 'none'; if (ghost) $('ghostTag').textContent = `👻 오늘 1등 ${ghost.name} (🐟 ${ghost.score})의 고스트와 경주 중`;
+  await map.voxelUnstamp('ghost').catch(() => {});
+  G.over = false; $('clickhint').textContent = '화면을 누르면 시작해요';
 }
-function open(id) { document.querySelectorAll('.modal').forEach(m => m.classList.toggle('on', m.id === id)); document.body.classList.toggle('menu', !!id); }
-function drawDex() {
-  const all = pool(), n = all.filter(c => got.has(c.id)).length;
-  $('dexsub').textContent = `${all.length}마리 중 ${n}마리를 찾았어요.`;
-  $('dex').innerHTML = all.map(c => { const g = got.has(c.id); return `<button class="cat${g ? '' : ' lock'}${target === c ? ' on' : ''}" data-id="${c.id}"><div class="f">${c.face}</div><b>${g ? c.name : '???'}</b><small>${c.spot}</small></button>`; }).join('');
+async function eat(s) {
+  G.got.add(s.id); G.gotT.push({ id: s.id, t: +G.t.toFixed(2) }); await map.voxelUnstamp('ch-' + s.id).catch(() => {});
+  drawList(); pop(`🐟 냠! ${s.name}`);
+  if (G.got.size === T.spots.length) finish();
 }
-$('dex').onclick = e => { const b = e.target.closest('.cat'); if (!b) return; const c = ALL.find(x => x.id === b.dataset.id); if (got.has(c.id)) { toast(`${c.name}는 이미 찾았어요.`); return; } target = c; drawQuest(); drawDex(); toast(`이제 ${josa(c.spot, '을', '를')} 찾아가요.`); };
-$('resume').onclick = () => open(null);
-$('fnext').onclick = () => open(null);
-$('reset').onclick = async () => { for (const c of ALL) await map.voxelUnstamp(c.id).catch(() => {}); got = new Set(); save(); target = pickNext(); await placeCats(); drawQuest(); drawDex(); toast('처음부터 다시 시작해요.'); };
+async function finish(quit) {
+  if (G.over) return; G.over = true; G.running = false; await map.voxelFly({ unlock: true }).catch(() => {}); await map.voxelUnstamp('ghost').catch(() => {});
+  const n = G.got.size, last = G.gotT.length ? Math.max(...G.gotT.map(g => g.t)) : T.rules.roundS;
+  $('endTitle').textContent = n === T.spots.length ? '🎉 오늘의 츄르를 모두 모았어요!' : quit ? '여기까지 할게요' : '⏰ 시간 끝!';
+  $('endScore').innerHTML = `🐟 ${n}<small> / ${T.spots.length}</small>`;
+  $('endSub').textContent = n ? `마지막 츄르를 ${last.toFixed(1)}초에 먹었어요. 기록을 올리는 중…` : '츄르를 하나도 못 먹었어요. 하나 이상 먹어야 랭킹에 올라가요. 장소 이름을 보고 다시 도전해 보세요!';
+  $('rkEnd').innerHTML = ''; open('end');
+  // 마지막 위치를 길에 넣고 올림
+  if (pos) G.path.push(pos.map(v => +v.toFixed(1)));
+  try { const B = await api('/run', { method: 'POST', body: JSON.stringify({ day: T.day, name: ls.get('cukcats.name', '익명'), dept: ls.get('cukcats.dept', ''), got: G.gotT, path: G.path }) });
+    if (n) $('endSub').textContent = `마지막 츄르를 ${last.toFixed(1)}초에 먹었어요.` + (B.me ? ` 오늘 내 최고 기록은 ${B.me.rank}등이에요.` : '');
+    $('rkEnd').innerHTML = rankHtml(B, '오늘의 랭킹');
+  } catch (e) { $('endSub').textContent += ' (' + e.message + ')'; $('rkEnd').innerHTML = rankHtml(await loadBoard(), '오늘의 랭킹'); }
+}
+
+// 시간·길 기록·고스트(멈춘 동안은 흐르지 않음)
+let lastNow = 0, ghostAt = 0;
+function tick() {
+  const now = performance.now(), dt = Math.min(2, (now - (lastNow || now)) / 1000); lastNow = now; // 실제 흐른 시간(화면이 느려도 3분은 3분)
+  if (!G || !G.running || G.over) return;
+  G.t += dt;
+  const left = T.rules.roundS - G.t; $('timer').textContent = mmss(left); $('timer').classList.toggle('low', left < 30);
+  while (pos && G.t >= G.nextP) { G.path.push(pos.map(v => +v.toFixed(1))); G.nextP += T.rules.pathDt; }
+  if (ghost && now - ghostAt > 200) { ghostAt = now; const P = ghost.path, f = G.t / T.rules.pathDt, i = Math.floor(f);
+    if (i + 1 < P.length) { const a = P[i], b = P[i + 1], u = f - i, x = a[0] + (b[0] - a[0]) * u, y = a[1] + (b[1] - a[1]) * u, z = a[2] + (b[2] - a[2]) * u;
+      const dx = b[0] - a[0], dz = b[2] - a[2], ang = Math.atan2(dx, -dz), rot = ((Math.round(ang / (Math.PI / 2)) % 4) + 4) % 4;
+      map.voxelStamp({ id: 'ghost', x, z, y, rot, cells: GHOST }).catch(() => {}); }
+    else map.voxelUnstamp('ghost').catch(() => {}); }
+  if (left <= 0) finish();
+}
+setInterval(tick, 100); // 화면 그리기와 따로 돌아서 지도가 무거워도 시간은 정확
+window.__cats = { get G() { return G; }, get pos() { return pos; } }; // 자동 시험용
+
 map.on('fly', e => {
-  if ('locked' in e) { document.body.classList.toggle('locked', e.locked); if (!e.locked && started && !document.querySelector('.modal.on')) { drawDex(); open('menu'); } if (e.locked) open(null); }
-  if (e.pos) { pos = e.pos; warmth(); }
+  if ('locked' in e) { document.body.classList.toggle('locked', e.locked);
+    if (G && !G.over) { if (e.locked) { G.running = true; open(null); } else { G.running = false; if (!document.querySelector('.modal.on')) open('menu'); } } }
+  if (e.pos) { pos = e.pos; if (!START) START = { x: pos[0], z: pos[2], yaw: e.yaw };
+    if (G && G.running && !G.over) { for (const s of T.spots) if (!G.got.has(s.id) && Math.hypot(pos[0] - s.x, pos[2] - s.z) < T.rules.near) eat(s); warmth(); } }
 });
+
 $('go').onclick = async () => {
-  open(null); started = true; document.body.classList.add('ready');
-  // 실제 3D 지도 그대로 걷기(실내는 빼고, 건물은 들어갈 수 없는 벽. 필로티·다리 밑 통로는 지나갈 수 있음)
-  await map.voxelFly({ on: true, walk: true, building: '니콜스관' });
-  target = pickNext(); await placeCats(); drawQuest();
-  toast('화면을 누르고 W A S D로 걸어 보세요.', 4000);
+  const name = $('nick').value.trim(); if (!name) { toast('닉네임을 적어 주세요. 랭킹에 나와요.'); $('nick').focus(); return; }
+  ls.set('cukcats.name', name); ls.set('cukcats.dept', $('dept').value.trim());
+  if (!T) { toast('오늘의 판을 불러오지 못했어요. 잠시 뒤 다시 해 주세요.'); return; }
+  open(null); document.body.classList.add('playing');
+  if (!flyOn) { flyOn = true; await map.voxelFly({ on: true, walk: true, body: 'cat', building: '니콜스관' }); }
+  await newRound(); toast('화면을 누르면 3분이 시작돼요. 장소 이름을 보고 츄르를 찾아가요!', 4500);
 };
-target = pickNext(); drawQuest();
+$('resume').onclick = () => { open(null); toast('화면을 누르면 이어서 해요.'); };
+$('restart').onclick = async () => { open(null); await newRound(); toast('처음부터 다시! 화면을 누르면 시작해요.'); };
+$('quit').onclick = () => finish(true);
+$('again').onclick = async () => { open(null); await newRound(); toast('화면을 누르면 3분이 시작돼요.'); };
+$('home').onclick = async () => { await showStartBoard(); open('start'); };
+
+try { await loadToday(); } catch (e) { toast(e.message, 6000); }
+await showStartBoard();
 })().catch(e => { console.error(e); alert('불러오지 못했어요: ' + e.message); });
 </script>
 </body>
