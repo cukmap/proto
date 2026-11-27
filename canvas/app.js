@@ -30,21 +30,14 @@ async function api(path, o = {}) {
 }
 function setMe(m) { me = m; meAt = Date.now(); for (const n of m.notices || []) if (n.kind === 'answer') toast(`현장 질문 답이 다른 사람들 답과 맞아 확정됐어요! +${n.points}점`, 4000); updMe(); }
 const inkNow = () => !me ? 0 : me.ink >= RULES.INK_MAX ? me.ink : Math.min(RULES.INK_MAX, me.ink + (Date.now() - meAt) / 3600000 * RULES.INK_PER_H);
-function updMe() {
-  if (!me || !me.name) return;
-  $('me').innerHTML = '<b></b><span id="ink"></span>'; $('me').querySelector('b').textContent = me.name;
-  $('ink').textContent = `🎨 ${inkNow().toFixed(1)}㎡ · ⭐ ${me.points}점`;
-  $('ink').title = `물감은 한 시간에 ${RULES.INK_PER_H}㎡씩 ${RULES.INK_MAX}㎡까지 차요. 퀴즈를 풀면 더 쌓을 수 있어요.`;
-  if (cur) costTxt();
-}
+function updMe() { if (!me) return; $('ink').textContent = `🎨 물감 ${inkNow().toFixed(1)}㎡ · ⭐ ${me.points}`; $('ink').title = `물감은 한 시간에 ${RULES.INK_MAX ? RULES.INK_PER_H : 6}㎡씩 ${RULES.INK_MAX}㎡까지 차요. 퀴즈를 풀면 더 쌓을 수 있어요.`; if (cur) costTxt(); }
 setInterval(updMe, 15000);
 
 // ---------- 지도: 하얀 학교 + 모든 건물의 벽 도화지 ----------
 const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
 let plainOn = true; await map.plain(1);
 $('tlBtn').onclick = timelapse;
-$('plainBtn').onclick = async () => { plainOn = !plainOn; await map.plain(plainOn ? 1 : 0); $('plainBtn').classList.toggle('on', !plainOn); $('plainBtn').textContent = plainOn ? '🎨 원래 색 보기' : '🏫 하얀 학교로'; };
-let opT = null; $('op').oninput = () => { clearTimeout(opT); opT = setTimeout(() => map.sheetOpacity($('op').value / 100), 30); };
+$('plainBtn').onclick = async () => { plainOn = !plainOn; await map.plain(plainOn ? 1 : 0); $('plainBtn').textContent = plainOn ? '🎨 원래 색' : '🏫 하얀 학교'; };
 const BUILD = [], SHEETS = [];
 for (const b of await map.buildings()) { try { const ss = (await map.sheets({ buildings: [b.name] })).filter(s => s.length >= 2 && s.height >= 2); if (ss.length) { BUILD.push(b.name); SHEETS.push(...ss); } } catch (_) {} }
 const byId = id => SHEETS.find(s => s.id === id);
@@ -111,7 +104,7 @@ const whoTxt = p => !p ? '아직 아무도 칠하지 않은 곳이에요.' : `${
 if (Q.has('debug')) globalThis.__cv = { whoAt, PATCHES, IMG, art, map, get cur() { return cur; } };
 // 3D에서 벽을 누르면: 누가 칠했는지 + 그리기 버튼
 map.on('click', e => {
-  if (bmode === 'block') return;
+  if (bmode !== 'orbit') return;
   const pop = $('pop');
   if (!e.sheet) { pop.classList.remove('on'); if (e.building) toast('벽을 눌러 주세요.'); return; }
   const s = byId(e.sheet); if (!s) return; const { H, k } = sizeOf(s), p = whoAt(s.id, Math.floor(e.su * k), Math.floor(H - e.sv * k)), n = PRES.get(s.id) || 0;
@@ -121,8 +114,8 @@ map.on('click', e => {
 
 // ---------- 블록으로 꾸미기 ----------
 // 25cm 블록을 지도 위에 쌓고·지우고·칠한다. 한 번 누를 때 바뀐 칸들을 서버에 한 줄로 올리고, 다른 사람 것은 몇 초마다 받아 겹친다.
-let bmode = 'block', vtool = 'add', vcolor = '#c0392b', vsize = 1, vstamp = null;
-const VPAL = ['#c0392b', '#e8552e', '#f2c230', '#2e9b5f', '#1f6b3a', '#3b7dd8', '#7a55c7', '#ff9ec7', '#8a5a2b', '#f4f6f8', '#9aa39d', '#26392f', '#d9cbb0', '#8fd0ff', '#b8452c', '#4a5b3f', '#ffd76a'];
+let bmode = 'fly';
+const VPAL_UNUSED = ['#c0392b', '#e8552e', '#f2c230', '#2e9b5f', '#1f6b3a', '#3b7dd8', '#7a55c7', '#ff9ec7', '#8a5a2b', '#f4f6f8', '#9aa39d', '#26392f', '#d9cbb0', '#8fd0ff', '#b8452c', '#4a5b3f', '#ffd76a'];
 // 기본 작품(놓은 뒤에도 블록이라 마음대로 고칠 수 있어요). [가로, 높이, 세로, 색], 0,0,0 = 누른 곳 바로 위
 const STAMPS = {
   '🎄 트리': () => { const o = [], R = (a, b) => (Math.sin(a * 12.99 + b * 78.23) * 43758.5) % 1; for (let y = 0; y < 3; y++) for (const [x, z] of [[0, 0], [1, 0], [0, 1], [1, 1]]) o.push([x, y, z, '#6b4226']);
@@ -136,28 +129,42 @@ const STAMPS = {
   '⭐ 별': () => { const o = [], P = [[0, 6], [-1, 5], [0, 5], [1, 5], [-1, 4], [0, 4], [1, 4], [-4, 3], [-3, 3], [-2, 3], [-1, 3], [0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [-2, 2], [-1, 2], [0, 2], [1, 2], [2, 2], [-2, 1], [-1, 1], [0, 1], [1, 1], [2, 1], [-3, 0], [-2, 0], [2, 0], [3, 0]]; for (const [x, y] of P) o.push([x, y + 1, 0, '#ffd76a']); return o; },
   '💚 리스': () => { const o = []; for (let x = -4; x <= 4; x++) for (let y = -4; y <= 4; y++) { const d = Math.hypot(x, y); if (d >= 2.4 && d <= 4.2) o.push([x, y + 5, 0, (x + y) % 3 === 0 ? '#c0392b' : '#1f6b3a']); } o.push([-1, 1, -1, '#c0392b'], [0, 1, -1, '#c0392b'], [1, 1, -1, '#c0392b']); return o; }
 };
-$('vcols').innerHTML = VPAL.map(c => `<button data-c="${c}" style="background:${c}" class="${c === vcolor ? 'on' : ''}" title="${c}"></button>`).join('') + '<button title="다른 색" style="background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)"><input type="color" id="vpick" value="#c0392b" style="opacity:0"></button>';
-$('stamps').insertAdjacentHTML('beforeend', Object.keys(STAMPS).map(k => `<button data-st="${k}">${k}</button>`).join(''));
-function syncTool() {
-  document.querySelectorAll('#vtools button').forEach(b => b.classList.toggle('on', vstamp == null && b.dataset.v === vtool));
-  document.querySelectorAll('#stamps button').forEach(b => b.classList.toggle('on', b.dataset.st === vstamp));
-  document.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === vsize));
-  document.querySelectorAll('#vcols button[data-c]').forEach(b => b.classList.toggle('on', b.dataset.c === vcolor));
-  const tool = bmode !== 'block' ? null : vstamp ? 'stamp' : vtool === 'look' ? null : vtool;
-  map.voxelMode({ tool, color: vcolor, size: vsize, stamp: vstamp ? STAMPS[vstamp]() : undefined });
-}
-$('btools').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.v) { vtool = b.dataset.v; vstamp = null; }
-  else if (b.dataset.s) vsize = +b.dataset.s;
-  else if (b.dataset.c) { vcolor = b.dataset.c; if (vtool !== 'add' && vtool !== 'paint') vtool = 'add'; vstamp = null; }
-  else if (b.dataset.st) { vstamp = vstamp === b.dataset.st ? null : b.dataset.st; if (vstamp) toast(`${vstamp}를 놓을 곳을 눌러요. 놓은 뒤엔 블록이라 마음대로 고칠 수 있어요.`); }
-  else return;
-  syncTool();
+// 손에 든 것(핫바) 9칸: 색 7개 + 기본 작품 2개. E로 바꿀 수 있고, 휠 클릭으로 블록 색을 집을 수도 있어요
+let started = false, flying = false;
+const SLOTS = ['#c0392b', '#f2c230', '#2e9b5f', '#3b7dd8', '#f4f6f8', '#8a5a2b', '#26392f'].map(c => ({ color: c })).concat([{ name: '🎄 트리' }, { name: '⛄ 눈사람' }]);
+let slot = 0;
+const kitSlots = () => SLOTS.map(s => s.color ? { color: s.color } : { stamp: STAMPS[s.name](), name: s.name });
+function drawHotbar() { $('hotbar').innerHTML = SLOTS.map((s, i) => `<button data-i="${i}" class="${i === slot ? 'on' : ''}" title="${s.color || s.name}"><i>${i + 1}</i>${s.color ? `<span class="sw" style="background:${s.color}"></span>` : esc(s.name.split(' ')[0])}</button>`).join(''); }
+$('hotbar').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; slot = +b.dataset.i; drawHotbar(); map.voxelFly({ slot }); });
+const PALC = ['#c0392b', '#e8552e', '#f28c38', '#f2c230', '#ffd76a', '#2e9b5f', '#1f6b3a', '#4a5b3f', '#3b7dd8', '#8fd0ff', '#1d3a6b', '#7a55c7', '#ff9ec7', '#c2456b', '#f4f6f8', '#d9cbb0', '#9aa39d', '#5b6770', '#26392f', '#8a5a2b', '#6b4226', '#b8452c', '#e9e2cf', '#000000'].map(c => c === '#000000' ? '#141414' : c);
+$('palcols').innerHTML = PALC.map(c => `<button data-c="${c}" style="background:${c}"></button>`).join('');
+$('palst').innerHTML = Object.keys(STAMPS).map(k => `<button data-st="${k}">${k}</button>`).join('');
+function setSlot(v) { SLOTS[slot] = v; drawHotbar(); map.voxelFly({ slots: kitSlots(), slot }); closeModals(); }
+$('palcols').onclick = e => { const b = e.target.closest('button'); if (b) setSlot({ color: b.dataset.c }); };
+$('palpick').onchange = () => setSlot({ color: $('palpick').value });
+$('palst').onclick = e => { const b = e.target.closest('button'); if (b) setSlot({ name: b.dataset.st }); };
+const anyModal = () => [...document.querySelectorAll('.modal')].some(m => m.classList.contains('on'));
+function openModal(id) { document.querySelectorAll('.modal').forEach(m => m.classList.toggle('on', m.id === id)); document.body.classList.toggle('menu', !!id); if (id === 'palette') $('palslot').textContent = slot + 1; }
+function closeModals() { openModal(null); }
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => openModal(bmode === 'fly' ? 'menu' : null));
+$('resume').onclick = () => { closeModals(); toast('화면을 누르면 다시 들어가요.'); };
+$('menu').addEventListener('click', async e => { const b = e.target.closest('[data-a]'); if (!b) return; const a = b.dataset.a;
+  if (a === 'palette') openModal('palette');
+  if (a === 'earn') { openModal('earn'); await loadEarn(); drawPane(); }
+  if (a === 'orbit') { closeModals(); toOrbit(); }
+  if (a === 'tl') { closeModals(); toOrbit(); timelapse(); } });
+async function enterFly() { bmode = 'fly'; document.body.classList.remove('orbit'); document.body.classList.add('ready'); $('pop').classList.remove('on'); closeModals();
+  await map.voxelFly({ on: true, building: '니콜스관', slots: kitSlots(), slot }); drawHotbar(); }
+async function toOrbit() { bmode = 'orbit'; await map.voxelFly({ on: false }); document.body.classList.add('orbit'); document.body.classList.remove('locked');
+  await map.focus({ building: '니콜스관', zoom: 160 }).catch(() => {}); toast('벽을 누르면 그 벽에 그림을 그릴 수 있어요.'); }
+$('enterBtn').onclick = enterFly;
+map.on('fly', e => {
+  if ('locked' in e) { document.body.classList.toggle('locked', e.locked); if (!e.locked && bmode === 'fly' && !anyModal() && !cur) openModal('menu'); if (e.locked) closeModals(); }
+  if ('slot' in e) { slot = e.slot; drawHotbar(); }
+  if (e.slots) { e.slots.forEach((s, i) => { if (s.color) SLOTS[i] = { color: s.color }; }); drawHotbar(); }
+  if ('flying' in e) { flying = e.flying; $('status').textContent = flying ? '🕊 나는 중 · 스페이스 위로, Shift 아래로' : ''; }
+  if (e.menu === 'palette') openModal('palette');
 });
-$('vpick').oninput = () => { vcolor = $('vpick').value; vstamp = null; if (vtool !== 'paint') vtool = 'add'; syncTool(); };
-document.querySelectorAll('#modes button').forEach(b => b.onclick = () => { bmode = b.dataset.m; document.querySelectorAll('#modes button').forEach(x => x.classList.toggle('on', x === b)); document.body.classList.toggle('wall', bmode === 'wall');
-  $('hint').textContent = bmode === 'block' ? '블록을 골라 학교 어디든 눌러 쌓아요. 드래그하면 돌려 볼 수 있어요' : '건물 벽을 누르면 그 벽이 도화지로 펼쳐져요'; $('pop').classList.remove('on'); syncTool(); if (bmode === 'block') map.focus({ building: '니콜스관', zoom: 55, pitch: .55 }).catch(() => {}); });
 // 서버와 맞추기
 const VROWS = [], VKNOWN = new Set(), VHID = new Set(), MYVOX = [];
 let lastVid = 0;
@@ -175,10 +182,6 @@ map.on('voxel', async e => {
   try { const j = await api('/voxels', { method: 'POST', body: { cells: e.cells } }); const r = { id: j.vox.id, name: j.vox.name, at: j.vox.at, cells: e.cells }; VKNOWN.add(r.id); VROWS.push(r); MYVOX.push(r); lastVid = Math.max(lastVid, 0); }
   catch (er) { await map.voxelApply(e.before); toast(er.message, 3500); }
 });
-$('vundo').onclick = async () => {
-  const r = MYVOX.filter(q => !VHID.has(q.id)).pop(); if (!r) { toast('되돌릴 것이 없어요.'); return; }
-  try { await api(`/voxels/${r.id}`, { method: 'DELETE' }); VHID.add(r.id); await rebuildVox(); toast('되돌렸어요. 물감도 돌려받았어요.'); } catch (e) { toast(e.message); }
-};
 
 // ---------- 타임랩스: 하얀 학교가 칠해져 온 과정을 3D로 다시 보기 ----------
 let replaying = false;
@@ -336,7 +339,7 @@ function flood(x, y) {
 addEventListener('keydown', e => { if (!$('ed').classList.contains('show')) return; if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); (e.shiftKey ? $('redo') : $('undo')).click(); } if (e.key === 'Escape') $('edclose').click(); });
 
 // ---------- 오른쪽 패널 ----------
-let tab = 'walls', QUIZ = [], MYANS = new Map(), openB = new Set();
+let tab = 'earn', QUIZ = [], MYANS = new Map(), openB = new Set();
 let QUESTS = []; try { QUESTS = (await (await fetch('../quest/data/quests.json')).json()).quests.filter(q => !['찾기', '비교'].includes(q.type)).slice(0, 8); } catch (e) {}
 async function loadEarn() { try { const [a, b] = await Promise.all([api('/quizzes'), api('/answers')]); QUIZ = a.quizzes; MYANS = new Map(b.answers.map(r => [r.qkey, r])); } catch (e) { toast(e.message); } }
 function wallsPane() {
@@ -361,9 +364,8 @@ function earnPane() {
     `<div class="sec">🧩 학교 퀴즈 (바로 보상)</div>${quiz || '<div class="how">불러오는 중…</div>'}<div class="sec">📍 현장 질문 (나중 보상)</div>${quest}`;
 }
 function drawPane() {
-  const sc = $('pane').scrollTop; $('pane').innerHTML = tab === 'walls' ? wallsPane() : earnPane(); $('pane').scrollTop = sc;
+  const sc = $('pane').scrollTop; $('pane').innerHTML = earnPane(); $('pane').scrollTop = sc;
   $('pane').querySelectorAll('details.bld').forEach(d => d.ontoggle = () => { d.open ? openB.add(d.dataset.b) : openB.delete(d.dataset.b); });
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
 }
 $('pane').addEventListener('click', async e => {
   const t = e.target.closest('[data-qz],[data-qk],.sheet'); if (!t) return;
@@ -371,21 +373,16 @@ $('pane').addEventListener('click', async e => {
   if (t.dataset.qk) { try { const j = await api('/answer', { method: 'POST', body: { qkey: t.dataset.qk, value: t.dataset.v } }); toast(j.status === 'confirmed' ? '확정됐어요! 같은 답을 낸 사람 모두 점수를 받아요.' : j.status === 'different' ? '이미 확정된 답과 달라요. 다시 한번 봐 주세요.' : '답을 받았어요. 다른 사람 답과 맞으면 점수가 들어와요.', 3500); await loadEarn(); drawPane(); } catch (er) { toast(er.message); } return; }
   if (t.classList.contains('sheet')) openEditor(byId(t.dataset.id));
 });
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = async () => { tab = b.dataset.t; drawPane(); if (tab === 'earn') { await loadEarn(); drawPane(); } });
 
 // ---------- 시작 ----------
 $('startGo').onclick = async () => {
   const name = $('nick').value.trim() || ('익명' + Math.floor(100 + Math.random() * 900));
-  try { await api('/me', { method: 'POST', body: { name } }); $('start').remove(); drawPane(); toast(`물감 ${RULES.INK_MAX}㎡로 시작해요. 벽을 눌러 보세요!`); } catch (e) { toast(e.message); }
+  try { await api('/me', { method: 'POST', body: { name } }); $('start').remove(); await enterFly(); } catch (e) { toast(e.message); }
 };
 try { await refresh(); } catch (e) { toast(e.message, 5000); }
-updCover();
-if ((me && me.name) || AT) $('start').remove();
-if (AT) { $('hint').textContent = `📸 ${when(AT)}의 모습 (기록 보기)`; }
-drawPane();
-syncTool();
-// 블록은 25cm라 가까이서 시작(멀리서 보면 점처럼 보임)
-if (!AT) map.focus({ building: '니콜스관', zoom: 55, pitch: .55 }).catch(() => {});
+updCover(); drawHotbar(); updMe();
+if (AT) { $('start').remove(); document.body.classList.add('orbit'); $('enterBtn').style.display = 'none'; $('status').textContent = `📸 ${when(AT)}의 모습 (기록 보기)`; map.focus({ building: '니콜스관', zoom: 160 }).catch(() => {}); }
+else if (me && me.name) { $('start').remove(); await enterFly(); }
 // 실시간: 그리는 동안 2초, 둘러볼 땐 5초마다 새 획을 받는다(창을 안 볼 땐 쉼)
-let tick = 0; setInterval(async () => { tick++; if (AT || replaying || document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); if (!cur && tab === 'walls' && !$('pane').matches(':hover')) drawPane(); } catch (_) {} }, 1000);
+let tick = 0; setInterval(async () => { tick++; if (AT || replaying || document.hidden || tick % (cur ? 2 : 5)) return; try { await refresh(); } catch (_) {} }, 1000);
 })().catch(e => { console.error(e); const p = document.getElementById('pane'); if (p) p.textContent = '불러오지 못했어요: ' + e.message; });

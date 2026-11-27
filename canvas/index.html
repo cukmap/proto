@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>캔버스 · 벽 도화지 (시안)</title>
+<title>캔버스 · 학교 꾸미기</title>
 <!-- 시안: cukmap 3D 지도의 건물 외벽을 「벽 도화지」로 펼쳐 그림판처럼 그리고, 다시 3D 벽에 입힌다.
      태블릿(펜) 우선. 그림·물감·퀴즈·현장 질문은 cukmap 서버(/api/canvas)에 저장돼 모두가 같이 본다. -->
 <style>
@@ -78,29 +78,66 @@ details.bld{border-bottom:1px solid var(--line);padding:4px 0}details.bld summar
 .rank{font-size:12px;color:var(--mute);margin-top:12px;line-height:1.7}.rank b{color:var(--ink)}
 .sec{font-size:13px;font-weight:800;margin:14px 2px 4px;color:var(--g)}
 .q .pend{font-size:12.5px;color:#8a6a10;font-weight:700}.q .bad{font-size:12.5px;color:#9b3a16;font-weight:700}.q .why{font-size:12px;color:var(--mute);margin-top:4px}
+
+/* ===== 2026-11-27 단순한 화면: 지도 전체 + 조준점 + 손에 든 것(핫바) + Esc 메뉴 ===== */
+body{display:block;background:#0f1a14}
+#map{position:fixed;inset:0}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+#cross{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);display:none}
+#cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px #0006}#cross:before{left:10px;top:0;width:2px;height:22px}#cross:after{top:10px;left:0;height:2px;width:22px}
+body.locked #cross{display:block}
+#bar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+#ink{font-size:13px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000a}
+#hotbar{display:flex;gap:4px;background:#0008;padding:5px;border-radius:10px;pointer-events:auto}
+#hotbar button{width:46px;height:46px;border-radius:7px;border:2px solid #0000;background:#fff2;cursor:pointer;position:relative;padding:0;font-size:22px;line-height:1}
+#hotbar button.on{border-color:#fff;box-shadow:0 0 0 2px #0008}
+#hotbar button i{position:absolute;left:3px;top:1px;font-style:normal;font-size:10px;color:#fff;text-shadow:0 1px 2px #000}
+#hotbar .sw{position:absolute;inset:7px;border-radius:4px}
+#status{position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:13px;color:#fff;text-shadow:0 1px 3px #000a}
+#clickhint{position:absolute;left:50%;top:58%;transform:translateX(-50%);background:#000a;color:#fff;padding:10px 18px;border-radius:10px;font-size:15px;display:none}
+body.ready:not(.locked):not(.menu):not(.orbit) #clickhint{display:block}
+body.orbit #bar,body.orbit #clickhint{display:none}
+#orbitbar{position:fixed;left:12px;top:12px;z-index:11;display:none;gap:6px;align-items:center;flex-wrap:wrap}
+body.orbit #orbitbar{display:flex}
+#orbitbar button{font:inherit;font-size:13px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;box-shadow:0 2px 8px #0002}
+#orbitbar .main{background:var(--o);border-color:var(--o);color:#fff;font-weight:800}
+#cover{background:#fffffff0;border-radius:10px;padding:6px 12px;font-size:12.5px}
+.modal{position:fixed;inset:0;z-index:30;background:#0c1510a6;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.on{display:flex}
+.modal .box{width:min(520px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:16px;padding:20px 22px;box-shadow:0 18px 50px #0005}
+.modal h2{margin:0 0 4px;font-size:20px}.modal .sub{margin:0 0 14px;color:var(--mute);font-size:13.5px}
+.big{width:100%;font:inherit;font-size:15px;font-weight:800;padding:12px;border:0;border-radius:10px;background:var(--o);color:#fff;cursor:pointer}
+.mrow{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.mrow button{font:inherit;font-size:13.5px;padding:11px;border:1px solid #cfdcd3;border-radius:10px;background:#fff;cursor:pointer;text-align:left}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;color:#33463b;margin-top:14px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.keys b{font-family:ui-monospace,monospace;font-size:12px;background:#fff;border:1px solid #d7e2db;border-radius:5px;padding:1px 6px;justify-self:start}
+.pal{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:10px 0}
+.pal button{aspect-ratio:1;border-radius:8px;border:2px solid #fff;box-shadow:0 0 0 1px #0002;cursor:pointer}
+.stl{display:flex;flex-wrap:wrap;gap:6px}.stl button{font:inherit;font-size:13px;padding:8px 10px;border:1px solid #cfdcd3;border-radius:9px;background:#fff;cursor:pointer}
+.x{margin-top:14px;width:100%;font:inherit;font-size:13.5px;padding:10px;border:1px solid #cfdcd3;border-radius:10px;background:#fff;cursor:pointer}
 </style>
 </head>
 <body>
-<div id="mapwrap"><div id="map"></div>
-  <div id="topbar"><div id="modes"><button data-m="block" class="on">🧱 블록으로 꾸미기</button><button data-m="wall">🖼 벽에 그리기</button></div><div id="mix"><span>🏫 학교</span><input type="range" id="op" min="0" max="100" value="100" aria-label="그림 진하기"><span>🎨 그림</span></div><button id="plainBtn">🎨 원래 색 보기</button><button id="tlBtn">⏱ 타임랩스</button></div>
-  <div id="cover"></div>
-  <div id="pop"></div>
-  <div id="hint">블록을 골라 학교 어디든 눌러 쌓아요. 드래그하면 돌려 볼 수 있어요</div>
-  <div id="btools">
-    <div class="trow" id="vtools"><button data-v="add" class="on">➕ 쌓기</button><button data-v="remove">➖ 지우기</button><button data-v="paint">🎨 칠하기</button><button data-v="look">👀 둘러보기</button></div>
-    <div class="trow"><span class="lb">크기</span><button data-s="1" class="on">1</button><button data-s="2">2</button><button data-s="3">3</button><span class="lb" style="margin-left:6px">한 칸 25cm</span><button id="vundo" style="margin-left:auto">↶ 되돌리기</button></div>
-    <div class="vcols" id="vcols"></div>
-    <div class="trow stamps" id="stamps"><span class="lb">기본 작품</span></div>
-  </div>
-</div>
-<aside>
-  <header>
-    <div class="brand"><h1>캔버스</h1><span class="draft">시안 · 벽 도화지</span></div>
-    <div id="me">시작 전이에요<span id="ink"></span></div>
-  </header>
-  <div class="tabs"><button data-t="walls" class="on">🧱 벽 도화지</button><button data-t="earn">🧭 물감 모으기</button></div>
-  <div class="pane" id="pane"></div>
-</aside>
+<div id="map"></div>
+<div id="hud"><div id="cross"></div><div id="status"></div><div id="clickhint">화면을 누르면 들어가요</div>
+  <div id="bar"><div id="ink"></div><div id="hotbar"></div></div></div>
+<div id="orbitbar"><button class="main" id="enterBtn">🧱 들어가서 꾸미기</button><button id="plainBtn">🎨 원래 색</button><button id="tlBtn">⏱ 타임랩스</button><span id="cover"></span></div>
+<div id="pop"></div>
+
+<div class="modal" id="menu"><div class="box">
+  <h2>학교 꾸미기</h2><p class="sub" id="menusub">하얀 학교를 블록으로 다 같이 꾸며요.</p>
+  <button class="big" id="resume">▶ 계속하기</button>
+  <div class="keys"><b>W A S D</b><span>걷기</span><b>마우스</b><span>둘러보기</span><b>스페이스</b><span>점프 (두 번 누르면 날기, 날 때 위로)</span><b>Shift</b><span>날 때 아래로</span><b>Ctrl</b><span>빨리</span><b>왼쪽 클릭</b><span>블록 부수기</span><b>오른쪽 클릭</b><span>블록 놓기</span><b>휠 클릭</b><span>그 블록 색 집기</span><b>1~9 · 휠</b><span>손에 든 것 바꾸기</span><b>E</b><span>색·기본 작품 고르기</span><b>Esc</b><span>이 메뉴</span></div>
+  <div class="mrow"><button data-a="palette">🎨 색·작품 고르기</button><button data-a="earn">🧩 물감 모으기</button><button data-a="orbit">🗺 위에서 보기 · 벽에 그리기</button><button data-a="tl">⏱ 타임랩스</button></div>
+</div></div>
+<div class="modal" id="palette"><div class="box">
+  <h2>손에 들 것 고르기</h2><p class="sub">고른 것이 지금 칸(<span id="palslot">1</span>번)에 들어가요.</p>
+  <div class="pal" id="palcols"></div>
+  <label style="font-size:13px;color:var(--mute)">다른 색 <input type="color" id="palpick" value="#c0392b"></label>
+  <div class="sec">기본 작품 (놓은 뒤엔 블록이라 고칠 수 있어요)</div><div class="stl" id="palst"></div>
+  <button class="x" data-close>닫기</button>
+</div></div>
+<div class="modal" id="earn"><div class="box"><h2>물감 모으기</h2><div id="pane"></div><button class="x" data-close>닫기</button></div></div>
 
 <div id="ed">
   <div id="edtop"><div><h2 id="edtitle"></h2><small id="edsub"></small></div><span class="sp"></span>
@@ -120,18 +157,11 @@ details.bld{border-bottom:1px solid var(--line);padding:4px 0}details.bld summar
       <div id="edhelp">펜을 떼면 바로 모두에게 보여요. 손가락 두 개로 확대·이동해요. (마우스는 휠로 확대, 오른쪽 드래그로 이동)</div><div id="cost"></div></div>
   </div>
 </div>
-
 <div id="start"><div class="box">
   <h2>하얀 학교를 다 같이 꾸며요</h2>
-  <p>cukmap 3D 학교가 <b>색이 없는 하얀 모형</b>으로 시작해요. <b>25cm 블록</b>을 학교 어디든 쌓고 칠하거나, 벽을 골라 그림을 그려요. 만든 것은 <b>모두의 화면에 바로</b> 나타나요. 크리스마스 트리, 눈사람, 무엇이든 좋아요.</p>
-  <ul>
-    <li>벽은 크게 꺾이는 모서리마다 한 장씩 나뉘어 있어요. 한 벽을 여러 사람이 같이 써요. 남의 그림 위에 덧칠하거나 지울 수도 있어요.</li>
-    <li>태블릿 펜에 맞췄어요. 세게 누르면 굵게, 살살 누르면 가늘게 그려져요.</li>
-    <li><b>물감은 시간마다 차올라요</b>(최대 30㎡). 남의 그림 위에 덧그릴 수도 있지만, 한 사람이 한 번에 다 덮지 못하게 천천히 차요.</li>
-    <li><b>더 그리고 싶으면</b> 「물감 모으기」에서 학교 퀴즈를 풀면 바로, 현장 질문에 답하면 다른 사람 답과 맞았을 때 나중에 보상이 들어와요.</li>
-  </ul>
-  <label for="nick">닉네임 (선택)</label><input id="nick" maxlength="12" placeholder="예) 니콜스 벽화가">
-  <button class="go" id="startGo">시작하기</button><p style="font-size:12.5px;color:#6b7a70;margin:8px 0 0;text-align:center">닉네임은 비워 둬도 돼요</p>
+  <p>cukmap 3D 학교 안으로 들어가 <b>마인크래프트처럼</b> 블록을 쌓고 부숴요. 만든 것은 모두의 화면에 바로 나타나요.</p>
+  <label for="nick">닉네임 (선택)</label><input id="nick" maxlength="12" placeholder="비워 둬도 돼요">
+  <button class="go" id="startGo">들어가기</button>
 </div></div>
 <div id="toast"></div>
 
