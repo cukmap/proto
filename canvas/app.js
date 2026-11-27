@@ -35,7 +35,7 @@ setInterval(updMe, 15000);
 
 // ---------- 지도: 하얀 학교 + 모든 건물의 벽 도화지 ----------
 const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
-let plainOn = true; await map.plain(1);
+let plainOn = false; // 기본 색으로 시작(2026-11-27)
 $('tlBtn').onclick = timelapse;
 $('plainBtn').onclick = async () => { plainOn = !plainOn; await map.plain(plainOn ? 1 : 0); $('plainBtn').textContent = plainOn ? '🎨 원래 색' : '🏫 하얀 학교'; };
 const BUILD = [], SHEETS = [];
