@@ -30,7 +30,7 @@ async function api(path, o = {}) {
 }
 function setMe(m) { me = m; meAt = Date.now(); for (const n of m.notices || []) if (n.kind === 'answer') toast(`현장 질문 답이 다른 사람들 답과 맞아 확정됐어요! +${n.points}점`, 4000); updMe(); }
 const inkNow = () => !me ? 0 : me.ink >= RULES.INK_MAX ? me.ink : Math.min(RULES.INK_MAX, me.ink + (Date.now() - meAt) / 3600000 * RULES.INK_PER_H);
-function updMe() { if (!me) return; $('ink').textContent = `🎨 물감 ${inkNow().toFixed(1)}㎡ · ⭐ ${me.points}`; $('ink').title = `물감은 한 시간에 ${RULES.INK_MAX ? RULES.INK_PER_H : 6}㎡씩 ${RULES.INK_MAX}㎡까지 차요. 퀴즈를 풀면 더 쌓을 수 있어요.`; if (cur) costTxt(); }
+function updMe() { if (!me) return; if (RULES.FREE) { $('ink').textContent = '🧪 시험 중 · 물감 제한 없음'; return; } $('ink').textContent = `🎨 물감 ${inkNow().toFixed(1)}㎡ · ⭐ ${me.points}`; $('ink').title = `물감은 한 시간에 ${RULES.INK_MAX ? RULES.INK_PER_H : 6}㎡씩 ${RULES.INK_MAX}㎡까지 차요. 퀴즈를 풀면 더 쌓을 수 있어요.`; if (cur) costTxt(); }
 setInterval(updMe, 15000);
 
 // ---------- 지도: 하얀 학교 + 모든 건물의 벽 도화지 ----------
@@ -77,7 +77,7 @@ async function refresh() {
   try {
     const j = await api('/state?since=' + lastId + '&vsince=' + lastVid + (AT ? '&until=' + AT : ''));
     await voxSync(j);
-    RULES = j.rules; MINE = new Set(j.mine); PRES = new Map(j.presence.map(r => [r.sheet, r.n]));
+    RULES = j.rules; updMe(); MINE = new Set(j.mine); PRES = new Map(j.presence.map(r => [r.sheet, r.n]));
     const redo = new Set(), add = new Map();
     for (const id of j.hidden) if (!hiddenSet.has(id)) { hiddenSet.add(id); for (const [sh, l] of PATCHES) { const i = l.findIndex(p => p.id === id); if (i >= 0) { l.splice(i, 1); redo.add(sh); } } }
     for (const p of j.patches) { lastId = Math.max(lastId, p.id); if (hiddenSet.has(p.id) || !byId(p.sheet) || (PATCHES.get(p.sheet) || []).some(q => q.id === p.id)) continue; addPatch(p); if (!add.has(p.sheet)) add.set(p.sheet, []); add.get(p.sheet).push(p); }
@@ -257,7 +257,7 @@ async function flush() {
   const b = scan(cv); if (!b) { pendMode = null; return; }
   const s = cur.s, k = cur.k, mode = pendMode || 'paint';
   const area = Math.min(b.n / (k * k), b.w * b.h / (PPM * PPM));
-  if (area > inkNow() + 1e-6) { toast(`물감이 ${(area - inkNow()).toFixed(1)}㎡ 모자라 아직 못 올렸어요. 되돌리기로 줄이거나 「물감 모으기」에서 퀴즈를 풀어 주세요.`, 4500); return; }
+  if (!RULES.FREE && area > inkNow() + 1e-6) { toast(`물감이 ${(area - inkNow()).toFixed(1)}㎡ 모자라 아직 못 올렸어요. 되돌리기로 줄이거나 「물감 모으기」에서 퀴즈를 풀어 주세요.`, 4500); return; }
   const crop = newCanvas(b.w, b.h), cg = crop.getContext('2d'); cg.drawImage(cv, -b.x, -b.y);
   if (mode === 'erase') { cg.globalCompositeOperation = 'source-in'; cg.fillStyle = '#000'; cg.fillRect(0, 0, b.w, b.h); } // 지우기 장은 모양만 있으면 됨
   fx.clearRect(0, 0, fl.width, fl.height); fx.drawImage(cv, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height); undo = []; redo = []; pendMode = null;
@@ -291,7 +291,7 @@ const P = new Map(); let drawing = null, pinch = null;
 wrap.addEventListener('contextmenu', e => e.preventDefault());
 function begin(mode) { // 칠하기와 지우기는 따로 올린다
   if (pendMode && pendMode !== mode && scan(cv)) flush();
-  if (inkNow() - (cur ? pendArea() : 0) <= 0.05) { toast('물감이 다 떨어졌어요. 조금 기다리거나 「물감 모으기」에서 퀴즈를 풀어 주세요.', 3500); return false; }
+  if (!RULES.FREE && inkNow() - (cur ? pendArea() : 0) <= 0.05) { toast('물감이 다 떨어졌어요. 조금 기다리거나 「물감 모으기」에서 퀴즈를 풀어 주세요.', 3500); return false; }
   pendMode = mode; clearTimeout(sendT); return true;
 }
 wrap.addEventListener('pointerdown', e => {
