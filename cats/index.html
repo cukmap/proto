@@ -16,11 +16,13 @@ body{font-family:system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;colo
 body.playing #hud,body.explore #hud{display:block}
 body.explore #timer,body.explore #score,body.explore #list,body.explore #ghostTag{display:none!important}
 #exTag{position:absolute;left:14px;top:14px;background:#0f1a14d9;color:#fff;border-radius:12px;padding:9px 13px;font-size:13.5px;font-weight:700;display:none}body.explore #exTag{display:block}
-#lobby{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:20;width:min(560px,calc(100% - 24px));background:#fff;border-radius:18px;padding:16px 18px;box-shadow:0 14px 40px #0006}
-body:not(.home) #lobby{display:none}
-#lobby h1{margin:0;font-size:19px}#lobby p{margin:4px 0 12px;color:var(--mute);font-size:13.5px;line-height:1.5}
-#lobby .row .big{padding:14px 10px}#lobby .big small{display:block;font-weight:600;font-size:12px;opacity:.85;margin-top:2px}
-#lobby .lnk{display:block;margin:10px auto 0;font:inherit;font-size:12.5px;border:0;background:none;color:var(--mute);cursor:pointer;text-decoration:underline}
+#lobby .box{width:min(520px,100%)}
+.pick{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;border:1px solid var(--line);background:#fff;border-radius:14px;padding:14px 16px;margin-top:10px;cursor:pointer}
+.pick:hover{border-color:var(--g);background:var(--bg)}.pick .i{font-size:30px;width:40px;text-align:center}.pick b{display:block;font-size:16px}.pick small{display:block;color:var(--mute);font-size:13px;margin-top:2px;line-height:1.45}
+.pick.main{border:2px solid var(--o)}
+.lnk{display:block;margin:12px auto 0;font:inherit;font-size:12.5px;border:0;background:none;color:var(--mute);cursor:pointer;text-decoration:underline}
+#modeBtn{position:fixed;left:14px;top:14px;z-index:20;font:inherit;font-size:14px;font-weight:800;border:0;border-radius:999px;padding:10px 16px;background:var(--g);color:#fff;box-shadow:0 6px 18px #0004;cursor:pointer;display:none}
+body.home:not(.menu) #modeBtn{display:block}
 #cross{position:absolute;left:50%;top:50%;width:14px;height:14px;transform:translate(-50%,-50%);display:none}
 #cross:before,#cross:after{content:"";position:absolute;background:#fff;box-shadow:0 0 0 1px #0006}#cross:before{left:6px;top:0;width:2px;height:14px}#cross:after{top:6px;left:0;height:2px;width:14px}
 body.locked #cross{display:block}
@@ -73,12 +75,14 @@ table.rk tr.me td{background:#fff3ec;font-weight:800}
   <div id="pop"></div>
 </div>
 
-<div id="lobby">
-  <h1>🐈 치삼이와 성심교정 걷기</h1>
-  <p>마우스로 3D 지도를 돌려 보다가, 고양이가 되어 직접 걸어 보세요.</p>
-  <div class="row"><button class="big alt" id="toExplore">🐾 자유 탐방<small>시간 제한 없이 고양이 눈높이로 걷기</small></button><button class="big" id="toGame">🐟 츄르 게임<small>3분 동안 오늘의 츄르 모으기 · 랭킹</small></button></div>
+<button id="modeBtn">🐈 모드 고르기</button>
+<div class="modal on" id="lobby"><div class="box">
+  <h2>🐈 치삼이와 성심교정</h2><p class="sub">무엇을 해 볼까요?</p>
+  <button class="pick" id="toMap"><span class="i">🗺️</span><span><b>3D 맵 둘러보기</b><small>마우스로 돌리고 확대하며 학교를 위에서 내려다봐요</small></span></button>
+  <button class="pick" id="toExplore"><span class="i">🐾</span><span><b>자유 탐방</b><small>고양이가 되어 시간 제한 없이 학교를 걸어 다녀요</small></span></button>
+  <button class="pick main" id="toGame"><span class="i">🐟</span><span><b>게임 · 츄르 대작전</b><small>3분 동안 오늘의 츄르를 모아 랭킹에 도전해요</small></span></button>
   <button class="lnk" id="toRank">오늘의 랭킹 보기</button>
-</div>
+</div></div>
 
 <div class="modal" id="emenu"><div class="box">
   <h2>자유 탐방</h2><p class="sub">시간 제한 없이 마음껏 걸어 다녀요.</p>
@@ -142,7 +146,7 @@ const CHURU = [];
 for (let y = 0; y < 4; y++) for (let x = 0; x < 2; x++) CHURU.push([x, y, 0, y === 3 ? '#7b4bd8' : y === 1 ? '#ffffff' : '#ff8a3d']);
 CHURU.push([0, 4, 0, '#7b4bd8']);
 
-const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관', select: false });
+const map = await CUKmap.create('#map', { view: '3d', focus: '니콜스관' });
 
 // 오늘의 판
 let T = null;
@@ -233,15 +237,17 @@ function setMode(m) { mode = m; for (const c of ['home', 'explore', 'playing']) 
 async function goHome() { await clearGame(); open(null); setMode('home'); if (flyOn) { flyOn = false; pos = null; await map.voxelFly({ on: false }).catch(() => {}); } document.body.classList.remove('locked'); }
 async function goExplore() { await clearGame(); open(null); setMode('explore'); await flyOnCat(); toast('화면을 누르고 W A S D로 걸어 보세요. Esc를 누르면 메뉴가 나와요.', 4500); }
 async function goGameSetup() { await showStartBoard(); open('start'); }
+$('toMap').onclick = () => open(null);
+$('modeBtn').onclick = () => open('lobby');
 $('toExplore').onclick = goExplore;
 $('toGame').onclick = goGameSetup;
 $('toRank').onclick = goGameSetup;
-$('back').onclick = () => { open(mode === 'explore' ? 'emenu' : null); };
+$('back').onclick = () => { open(mode === 'explore' ? 'emenu' : 'lobby'); };
 $('eResume').onclick = () => { open(null); toast('화면을 누르면 이어서 걸어요.'); };
 $('eGame').onclick = goGameSetup;
 $('eOut').onclick = goHome;
 $('gOut').onclick = goHome;
-setMode('home');
+setMode('home'); open('lobby');
 // 실수로 창을 닫지 않게(Ctrl+W 등): 걷는 중엔 닫기 전에 한 번 물어봄
 addEventListener('beforeunload', e => { if (mode !== 'home') { e.preventDefault(); e.returnValue = ''; } });
 
