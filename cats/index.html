@@ -231,7 +231,7 @@ window.__cats = { get G() { return G; }, get pos() { return pos; } }; // 자동 
 
 // 모드: home(3D 지도) · explore(자유 탐방) · game(츄르 게임)
 let mode = 'home';
-async function flyOnCat() { if (flyOn) return; flyOn = true; await map.voxelFly({ on: true, walk: true, body: 'cat', building: '니콜스관' }); }
+async function flyOnCat() { if (flyOn) return; flyOn = true; await map.voxelFly({ on: true, walk: true, body: 'cat', x: 298, z: 89, yaw: -1.62 }); /* 정문 앞, 학교 쪽을 보고 시작 */ }
 async function clearGame() { if (T) await Promise.all(T.spots.map(s => map.voxelUnstamp('ch-' + s.id).catch(() => {}))); await map.voxelUnstamp('ghost').catch(() => {}); G = null; ghost = null; }
 function setMode(m) { mode = m; for (const c of ['home', 'explore', 'playing']) document.body.classList.toggle(c, (m === 'game' ? 'playing' : m) === c); }
 async function goHome() { await clearGame(); open(null); setMode('home'); if (flyOn) { flyOn = false; pos = null; await map.voxelFly({ on: false }).catch(() => {}); } document.body.classList.remove('locked'); }
